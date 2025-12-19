@@ -19,6 +19,8 @@ An intelligent news aggregation system that curates the most important AI, tech,
 
 ### One Command Install & Run
 
+Copy and paste this into your terminal:
+
 ```bash
 curl -fsSL https://github.com/dominiclampron/ainews/releases/latest/download/ainews-install.sh | bash
 ```
@@ -27,23 +29,46 @@ That's it! The script will:
 1. Clone the repository (first run only)
 2. Set up Python virtual environment
 3. Install dependencies
-4. Launch the aggregator
+4. Launch the **interactive menu**
 5. Open your news report in the browser
 
-### With Options
+---
+
+### Adding Options
+
+You can pass options to customize the run. Add `-s --` after `bash`, then your options:
+
+```bash
+curl -fsSL https://github.com/dominiclampron/ainews/releases/latest/download/ainews-install.sh | bash -s -- [OPTIONS]
+```
+
+#### Available Options
+
+| Option | Description |
+|--------|-------------|
+| `--preset ai_focus` | AI/ML focused news only |
+| `--preset finance` | Finance, crypto & tech industry |
+| `--preset quick_update` | Fast 24h summary, fewer articles |
+| `--preset deep_dive` | Full week, comprehensive report |
+| `--hours 24` | Look back 24 hours |
+| `--top 20` | Get 20 main articles |
+| `--update` | Update to latest version before running |
+| `--list-presets` | Show all available presets |
+
+#### Examples
 
 ```bash
 # Use AI/ML preset
-curl -fsSL https://...ainews-install.sh | bash -s -- --preset ai_focus
+curl -fsSL https://github.com/dominiclampron/ainews/releases/latest/download/ainews-install.sh | bash -s -- --preset ai_focus
 
-# Quick 24h summary
-curl -fsSL https://...ainews-install.sh | bash -s -- --hours 24 --top 15
+# Quick 24-hour summary
+curl -fsSL https://github.com/dominiclampron/ainews/releases/latest/download/ainews-install.sh | bash -s -- --preset quick_update
 
-# Update to latest version before running
-curl -fsSL https://...ainews-install.sh | bash -s -- --update
+# Update to latest version, then run finance preset
+curl -fsSL https://github.com/dominiclampron/ainews/releases/latest/download/ainews-install.sh | bash -s -- --update --preset finance
 
-# Update AND use a preset
-curl -fsSL https://...ainews-install.sh | bash -s -- --update --preset finance
+# Show all presets
+curl -fsSL https://github.com/dominiclampron/ainews/releases/latest/download/ainews-install.sh | bash -s -- --list-presets
 ```
 
 ---
