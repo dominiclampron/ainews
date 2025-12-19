@@ -1,4 +1,4 @@
-# 📰 News Aggregator v0.2
+# 📰 News Aggregator v0.3
 
 An intelligent news aggregation system that curates the most important AI, tech, finance, crypto, cybersecurity, and world news from 200+ sources.
 
@@ -59,6 +59,41 @@ curl -fsSL https://...ainews-install.sh | bash -s -- --update --preset finance
 
 ---
 
+## 🖥️ Interactive Launcher
+
+Running without arguments launches an interactive menu:
+
+```bash
+./run_ainews.sh
+```
+
+```
+╔══════════════════════════════════════════════════════════╗
+║           📰 NEWS AGGREGATOR v0.2 - LAUNCHER             ║
+╚══════════════════════════════════════════════════════════╝
+
+  [1] 🚀 Run with Default Settings
+  [2] 📋 Quick Presets
+  [3] ⚙️  Custom Run (configure options)
+  [4] 📅 Set Lookback Period
+  [5] 💾 Manage Presets
+  [6] ℹ️  Help / Documentation
+  [0] ❌ Exit
+```
+
+### Menu Options
+
+| Option | Description |
+|--------|-------------|
+| **1. Default Settings** | Full coverage with smart lookback |
+| **2. Quick Presets** | Choose from 7 preset configurations |
+| **3. Custom Run** | Configure hours, article counts, workers, categories |
+| **4. Lookback Period** | Quick selection: 12h, 24h, 48h, 7 days, etc. |
+| **5. Manage Presets** | List presets, edit presets.json |
+| **6. Help** | Documentation and usage tips |
+
+---
+
 ## 🛠️ Developer Setup
 
 For contributors or advanced users who want to clone directly:
@@ -68,10 +103,10 @@ For contributors or advanced users who want to clone directly:
 git clone https://github.com/dominiclampron/ainews.git
 cd ainews
 
-# Run with default settings
+# Launch interactive menu
 ./run_ainews.sh
 
-# Or with options
+# Or run directly with preset (skip menu)
 ./run_ainews.sh --preset ai_focus
 ```
 

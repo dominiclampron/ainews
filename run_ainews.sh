@@ -1,25 +1,39 @@
 #!/usr/bin/env bash
 # =============================================================================
-# News Aggregator v0.2 - Launcher Script
+# News Aggregator v0.2 - Interactive Launcher
 # =============================================================================
-# This script sets up the environment and runs the news aggregator.
-# It handles virtual environment creation, dependency installation, and execution.
+# This script provides an interactive menu for running the news aggregator.
 #
 # USAGE:
-#   ./run_ainews.sh                    # Run with default settings
-#   ./run_ainews.sh --preset ai_focus  # Use AI/ML preset
+#   ./run_ainews.sh                    # Launch interactive menu
+#   ./run_ainews.sh --preset ai_focus  # Direct run with preset (skip menu)
+#   ./run_ainews.sh --menu             # Force interactive menu
 #   ./run_ainews.sh --list-presets     # Show available presets
 #   ./run_ainews.sh --help             # Show all options
 #
-# WHAT IT DOES:
-#   1. Creates a Python virtual environment (if not exists)
-#   2. Installs required Python packages
-#   3. Runs the news aggregator with your settings
-#   4. Opens the generated report in your browser
-#
 # =============================================================================
 
-set -euo pipefail  # Exit on error, undefined vars, pipe failures
+set -euo pipefail
+
+# =============================================================================
+# SIGNAL HANDLING - Graceful Ctrl+C
+# =============================================================================
+
+cleanup() {
+    echo ""
+    echo ""
+    echo "⚠️  Interrupted by user (Ctrl+C)"
+    echo "   Cleaning up..."
+    
+    # Kill any background jobs (portable: works on macOS and Linux)
+    jobs -p 2>/dev/null | while read pid; do kill "$pid" 2>/dev/null; done || true
+    
+    echo "   Goodbye!"
+    exit 130  # Standard exit code for SIGINT
+}
+
+# Trap SIGINT (Ctrl+C) and SIGTERM
+trap cleanup SIGINT SIGTERM
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,117 +41,750 @@ cd "$SCRIPT_DIR"
 
 # Create installation marker (for curl installer detection)
 touch ".ainews_installed"
-
-# Export environment variable for detection
 export AINEWS_INSTALLED="$SCRIPT_DIR"
 
 # =============================================================================
-# CONFIGURATION - You can customize these values
+# CONFIGURATION
 # =============================================================================
 
-# Main Python script (don't change unless you rename it)
 PY_SCRIPT="ainews.py"
-
-# Sources file containing RSS feed URLs
-# Edit sources.txt to add/remove news sources
 SOURCES="sources.txt"
+VERSION="0.3"
 
-# -----------------------------------------------------------------------------
-# DEFAULT AGGREGATOR SETTINGS (used when no --preset is specified)
-# These can be overridden via command line: ./run_ainews.sh --top 40
-# -----------------------------------------------------------------------------
-
-# Number of main articles to include (default: 30)
-# Higher = more articles, longer report
-DEFAULT_TOP_ARTICLES=30
-
-# Range for "Other Interesting" section (10-20 additional articles)
+# Default settings
+DEFAULT_TOP=30
 DEFAULT_OTHER_MIN=10
 DEFAULT_OTHER_MAX=20
-
-# Number of parallel workers for fetching (default: 25)
-# Higher = faster but uses more bandwidth/connections
-# Lower if you experience connection issues
 DEFAULT_WORKERS=25
 
 # =============================================================================
-# SCRIPT EXECUTION - Generally don't modify below this line
+# COLORS & FORMATTING
 # =============================================================================
 
-# Check if help or list-presets is requested (pass through to Python)
-for arg in "$@"; do
-    if [[ "$arg" == "--help" || "$arg" == "-h" || "$arg" == "--list-presets" ]]; then
-        # Ensure venv exists for these commands too
-        if [ ! -d ".venv" ]; then
-            python3 -m venv .venv
-        fi
-        source .venv/bin/activate
-        pip install -q -r requirements.txt 2>/dev/null || true
-        python "$PY_SCRIPT" "$@"
-        exit $?
+# Detect terminal capabilities
+if [ -t 1 ] && command -v tput &>/dev/null && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+    BOLD=$(tput bold)
+    RED=$(tput setaf 1)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    BLUE=$(tput setaf 4)
+    MAGENTA=$(tput setaf 5)
+    CYAN=$(tput setaf 6)
+    WHITE=$(tput setaf 7)
+    NC=$(tput sgr0)
+    HAS_COLOR=true
+else
+    BOLD="" RED="" GREEN="" YELLOW="" BLUE="" MAGENTA="" CYAN="" WHITE="" NC=""
+    HAS_COLOR=false
+fi
+
+# =============================================================================
+# TTY INPUT HANDLING
+# =============================================================================
+# When script is piped (curl ... | bash), stdin is the pipe, not the terminal.
+# We read from /dev/tty directly to get user input in interactive mode.
+
+# Check if /dev/tty is available
+if [ -e /dev/tty ]; then
+    TTY_AVAILABLE=true
+else
+    TTY_AVAILABLE=false
+fi
+
+# Read a single character from user (works even when piped)
+read_char() {
+    if [ "$TTY_AVAILABLE" = true ]; then
+        read -n 1 -s -r "$@" </dev/tty
+    else
+        read -n 1 -s -r "$@"
     fi
+}
+
+# Read a line from user (works even when piped)
+read_line() {
+    if [ "$TTY_AVAILABLE" = true ]; then
+        read -r "$@" </dev/tty
+    else
+        read -r "$@"
+    fi
+}
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+print_header() {
+    clear
+    echo "${BOLD}${BLUE}"
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║           📰 NEWS AGGREGATOR v${VERSION} - LAUNCHER             ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo "${NC}"
+}
+
+print_line() {
+    echo "${BLUE}──────────────────────────────────────────────────────────${NC}"
+}
+
+info() { echo "${GREEN}✓${NC} $1"; }
+warn() { echo "${YELLOW}⚠${NC} $1"; }
+error() { echo "${RED}✗${NC} $1" >&2; }
+
+wait_key() {
+    echo ""
+    echo -n "Press any key to continue..."
+    read_char
+    echo ""
+}
+
+# =============================================================================
+# ENVIRONMENT SETUP
+# =============================================================================
+
+setup_environment() {
+    # Create virtual environment if it doesn't exist
+    if [ ! -d ".venv" ]; then
+        echo "📦 Creating virtual environment (first-time setup)..."
+        python3 -m venv .venv
+        info "Virtual environment created"
+    fi
+
+    # Activate virtual environment
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+
+    # Install dependencies quietly
+    echo "📦 Checking dependencies..."
+    python -m pip install --upgrade pip wheel setuptools -q 2>/dev/null || true
+    pip install -r requirements.txt -q 2>/dev/null || true
+    info "Environment ready"
+}
+
+# =============================================================================
+# RUN AGGREGATOR
+# =============================================================================
+
+run_aggregator() {
+    local args="$1"
+    echo ""
+    print_line
+    echo "🚀 ${BOLD}Starting News Aggregator...${NC}"
+    print_line
+    echo ""
+    
+    eval "python \"$PY_SCRIPT\" --sources \"$SOURCES\" $args"
+    
+    echo ""
+    print_line
+    info "Complete!"
+    print_line
+}
+
+# =============================================================================
+# MENUS
+# =============================================================================
+
+show_main_menu() {
+    print_header
+    echo "  ${BOLD}[1]${NC} 🚀 Run with Default Settings"
+    echo "  ${BOLD}[2]${NC} 📋 Quick Presets"
+    echo "  ${BOLD}[3]${NC} ⚙️  Custom Run (configure options)"
+    echo "  ${BOLD}[4]${NC} 📅 Set Lookback Period"
+    echo "  ${BOLD}[5]${NC} 💾 Manage Presets"
+    echo "  ${BOLD}[6]${NC} ℹ️  Help / Documentation"
+    echo "  ${BOLD}[0]${NC} ❌ Exit"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-6]: "
+}
+
+show_presets_menu() {
+    print_header
+    echo "  ${BOLD}${CYAN}📋 QUICK PRESETS${NC}"
+    echo ""
+    echo "  ${BOLD}[1]${NC} 🤖 AI/ML Focus        ${YELLOW}(48h, 25 articles)${NC}"
+    echo "  ${BOLD}[2]${NC} 💹 Finance & Markets  ${YELLOW}(24h, 30 articles)${NC}"
+    echo "  ${BOLD}[3]${NC} 🔐 Cybersecurity      ${YELLOW}(48h, 20 articles)${NC}"
+    echo "  ${BOLD}[4]${NC} 🌍 World & Politics   ${YELLOW}(48h, 25 articles)${NC}"
+    echo "  ${BOLD}[5]${NC} 📰 Full Coverage      ${YELLOW}(smart, 30 articles)${NC}"
+    echo "  ${BOLD}[6]${NC} ⚡ Quick Update       ${YELLOW}(24h, 15 articles)${NC}"
+    echo "  ${BOLD}[7]${NC} 📚 Deep Dive          ${YELLOW}(7 days, 50 articles)${NC}"
+    echo ""
+    echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-7]: "
+}
+
+show_lookback_menu() {
+    print_header
+    echo "  ${BOLD}${CYAN}📅 SET LOOKBACK PERIOD${NC}"
+    echo ""
+    echo "  ${BOLD}[1]${NC} ⚡ Last 12 hours"
+    echo "  ${BOLD}[2]${NC} 📅 Last 24 hours (1 day)"
+    echo "  ${BOLD}[3]${NC} 📅 Last 48 hours (2 days)"
+    echo "  ${BOLD}[4]${NC} 📅 Last 72 hours (3 days)"
+    echo "  ${BOLD}[5]${NC} 📅 Last 7 days"
+    echo "  ${BOLD}[6]${NC} 📅 Last 14 days"
+    echo "  ${BOLD}[7]${NC} 📅 Last 30 days"
+    echo "  ${BOLD}[8]${NC} 🔧 Custom hours..."
+    echo ""
+    echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-8]: "
+}
+
+# Category names and icons for checkbox display
+CATEGORY_NAMES=(
+    "ai_headlines:📰 AI/ML Headlines"
+    "tools_platforms:🛠️ Tools & Platforms"
+    "governance_safety:⚖️ Governance & Safety"
+    "finance_markets:💹 Finance & Markets"
+    "crypto_blockchain:₿ Crypto & Blockchain"
+    "cybersecurity:🔐 Cybersecurity"
+    "tech_industry:💻 Tech Industry"
+    "politics_policy:🏛️ Politics & Policy"
+    "world_news:🌍 World News"
+    "viral_trending:🔥 Viral & Trending"
+)
+
+# Track selected categories (1=selected, 0=not)
+declare -a SELECTED_CATS
+
+init_category_selection() {
+    SELECTED_CATS=()
+    for i in "${!CATEGORY_NAMES[@]}"; do
+        if [[ -z "$CUSTOM_CATEGORIES" ]]; then
+            SELECTED_CATS[$i]=1  # All selected by default
+        else
+            local cat_key="${CATEGORY_NAMES[$i]%%:*}"
+            if [[ "$CUSTOM_CATEGORIES" == *"$cat_key"* ]]; then
+                SELECTED_CATS[$i]=1
+            else
+                SELECTED_CATS[$i]=0
+            fi
+        fi
+    done
+}
+
+show_category_selector() {
+    print_header
+    echo "  ${BOLD}${CYAN}🏷️ SELECT CATEGORIES${NC}"
+    echo ""
+    echo "  Toggle categories on/off by entering their number."
+    echo "  ${GREEN}[✓]${NC} = included, ${RED}[ ]${NC} = excluded"
+    echo ""
+    
+    local all_selected=true
+    for i in "${!CATEGORY_NAMES[@]}"; do
+        local num=$((i + 1))
+        local cat_display="${CATEGORY_NAMES[$i]#*:}"
+        if [[ "${SELECTED_CATS[$i]}" == "1" ]]; then
+            echo "  ${BOLD}[$num]${NC} ${GREEN}[✓]${NC} $cat_display"
+        else
+            echo "  ${BOLD}[$num]${NC} ${RED}[ ]${NC} $cat_display"
+            all_selected=false
+        fi
+    done
+    
+    echo ""
+    print_line
+    echo ""
+    if [[ "$all_selected" == true ]]; then
+        echo "  ${BOLD}[A]${NC} ☐ Deselect All"
+    else
+        echo "  ${BOLD}[A]${NC} ☑ Select All"
+    fi
+    echo "  ${BOLD}[9]${NC} ✓ Done - Apply Selection"
+    echo "  ${BOLD}[0]${NC} ✗ Cancel"
+    echo ""
+    print_line
+    echo -n "Toggle category [1-10] or action [0/9/A]: "
+}
+
+show_custom_menu() {
+    print_header
+    echo "  ${BOLD}${CYAN}⚙️ CUSTOM RUN CONFIGURATION${NC}"
+    echo ""
+    echo "  Current settings:"
+    echo "    Hours:      ${YELLOW}${CUSTOM_HOURS:-smart}${NC}"
+    echo "    Articles:   ${YELLOW}${CUSTOM_TOP:-$DEFAULT_TOP}${NC} main + ${YELLOW}${CUSTOM_OTHER_MIN:-$DEFAULT_OTHER_MIN}-${CUSTOM_OTHER_MAX:-$DEFAULT_OTHER_MAX}${NC} other"
+    echo "    Workers:    ${YELLOW}${CUSTOM_WORKERS:-$DEFAULT_WORKERS}${NC}"
+    
+    # Show categories nicely
+    if [[ -z "$CUSTOM_CATEGORIES" ]]; then
+        echo "    Categories: ${YELLOW}All (10)${NC}"
+    else
+        local count=$(echo "$CUSTOM_CATEGORIES" | tr ',' '\n' | wc -l)
+        echo "    Categories: ${YELLOW}$count selected${NC}"
+    fi
+    echo ""
+    print_line
+    echo ""
+    echo "  ${BOLD}[1]${NC} 📅 Set lookback period"
+    echo "  ${BOLD}[2]${NC} 📊 Set article counts"
+    echo "  ${BOLD}[3]${NC} ⚡ Set worker count"
+    echo "  ${BOLD}[4]${NC} 🏷️  Select categories"
+    echo ""
+    echo "  ${BOLD}[5]${NC} 🚀 ${GREEN}Run with these settings${NC}"
+    echo "  ${BOLD}[6]${NC} 💾 Show settings (for presets.json)"
+    echo ""
+    echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-6]: "
+}
+
+show_manage_presets_menu() {
+    print_header
+    echo "  ${BOLD}${CYAN}💾 MANAGE PRESETS${NC}"
+    echo ""
+    echo "  ${BOLD}[1]${NC} 📋 List all presets"
+    echo "  ${BOLD}[2]${NC} ➕ Create new preset (via custom run)"
+    echo "  ${BOLD}[3]${NC} 📝 Edit presets.json (opens file)"
+    echo ""
+    echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-3]: "
+}
+
+show_help() {
+    print_header
+    echo "  ${BOLD}${CYAN}ℹ️ HELP & DOCUMENTATION${NC}"
+    echo ""
+    echo "  ${BOLD}What is News Aggregator?${NC}"
+    echo "  An intelligent system that curates news from 200+ sources"
+    echo "  across 10 categories: AI, Finance, Crypto, Cybersecurity,"
+    echo "  Tech, Politics, World News, and more."
+    echo ""
+    print_line
+    echo ""
+    echo "  ${BOLD}Quick Start:${NC}"
+    echo "  • Option 1: Run with defaults for full coverage"
+    echo "  • Option 2: Use a preset for focused news"
+    echo "  • Option 3: Configure custom settings"
+    echo ""
+    echo "  ${BOLD}Files you can edit:${NC}"
+    echo "  • ${CYAN}sources.txt${NC}  - Add/remove news sources"
+    echo "  • ${CYAN}presets.json${NC} - Create/modify presets"
+    echo ""
+    echo "  ${BOLD}Command line usage:${NC}"
+    echo "  ${YELLOW}./run_ainews.sh --preset ai_focus${NC}"
+    echo "  ${YELLOW}./run_ainews.sh --hours 24 --top 20${NC}"
+    echo "  ${YELLOW}python ainews.py --help${NC}"
+    echo ""
+    print_line
+    wait_key
+}
+
+show_run_confirmation() {
+    local hours="$1"
+    echo ""
+    print_line
+    echo ""
+    echo "  Lookback period set to: ${GREEN}${hours}${NC}"
+    echo ""
+    echo "  ${BOLD}[1]${NC} 🚀 Run now with this period"
+    echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-1]: "
+}
+
+# =============================================================================
+# MENU HANDLERS
+# =============================================================================
+
+handle_presets_menu() {
+    while true; do
+        show_presets_menu
+        read_line choice
+        case $choice in
+            1) run_aggregator "--preset ai_focus"; wait_key ;;
+            2) run_aggregator "--preset finance"; wait_key ;;
+            3) run_aggregator "--preset cybersecurity"; wait_key ;;
+            4) run_aggregator "--preset world"; wait_key ;;
+            5) run_aggregator "--preset default"; wait_key ;;
+            6) run_aggregator "--preset quick_update"; wait_key ;;
+            7) run_aggregator "--preset deep_dive"; wait_key ;;
+            0) return ;;
+            *) warn "Invalid choice. Please try again."; sleep 1 ;;
+        esac
+    done
+}
+
+handle_lookback_menu() {
+    local selected_hours=""
+    
+    while true; do
+        show_lookback_menu
+        read_line choice
+        case $choice in
+            1) selected_hours="12" ;;
+            2) selected_hours="24" ;;
+            3) selected_hours="48" ;;
+            4) selected_hours="72" ;;
+            5) selected_hours="168" ;;
+            6) selected_hours="336" ;;
+            7) selected_hours="720" ;;
+            8)
+                echo ""
+                echo -n "Enter hours (1-720): "
+                read_line hours
+                if [[ "$hours" =~ ^[0-9]+$ ]] && [ "$hours" -ge 1 ] && [ "$hours" -le 720 ]; then
+                    selected_hours="$hours"
+                else
+                    error "Invalid hours. Please enter a number between 1 and 720."
+                    sleep 2
+                    continue
+                fi
+                ;;
+            0) return ;;
+            *) warn "Invalid choice. Please try again."; sleep 1; continue ;;
+        esac
+        
+        # Show confirmation if hours were selected
+        if [[ -n "$selected_hours" ]]; then
+            show_run_confirmation "${selected_hours} hours"
+            read_line confirm
+            case $confirm in
+                1)
+                    run_aggregator "--hours $selected_hours"
+                    wait_key
+                    return
+                    ;;
+                0) return ;;
+                *) return ;;
+            esac
+        fi
+    done
+}
+
+handle_category_selector() {
+    init_category_selection
+    
+    while true; do
+        show_category_selector
+        read_line choice
+        
+        case $choice in
+            [1-9]|10)
+                local idx=$((choice - 1))
+                if [[ $idx -lt ${#CATEGORY_NAMES[@]} ]]; then
+                    if [[ "${SELECTED_CATS[$idx]}" == "1" ]]; then
+                        SELECTED_CATS[$idx]=0
+                    else
+                        SELECTED_CATS[$idx]=1
+                    fi
+                fi
+                ;;
+            [Aa])
+                # Toggle all
+                local all_selected=true
+                for i in "${!SELECTED_CATS[@]}"; do
+                    if [[ "${SELECTED_CATS[$i]}" == "0" ]]; then
+                        all_selected=false
+                        break
+                    fi
+                done
+                
+                if [[ "$all_selected" == true ]]; then
+                    # Deselect all
+                    for i in "${!SELECTED_CATS[@]}"; do
+                        SELECTED_CATS[$i]=0
+                    done
+                else
+                    # Select all
+                    for i in "${!SELECTED_CATS[@]}"; do
+                        SELECTED_CATS[$i]=1
+                    done
+                fi
+                ;;
+            9)
+                # Done - build categories string
+                local cats=""
+                local all_selected=true
+                for i in "${!CATEGORY_NAMES[@]}"; do
+                    if [[ "${SELECTED_CATS[$i]}" == "1" ]]; then
+                        local cat_key="${CATEGORY_NAMES[$i]%%:*}"
+                        if [[ -n "$cats" ]]; then
+                            cats="$cats,$cat_key"
+                        else
+                            cats="$cat_key"
+                        fi
+                    else
+                        all_selected=false
+                    fi
+                done
+                
+                if [[ "$all_selected" == true ]]; then
+                    CUSTOM_CATEGORIES=""  # All = empty (no filter)
+                else
+                    CUSTOM_CATEGORIES="$cats"
+                fi
+                return
+                ;;
+            0)
+                return
+                ;;
+            *)
+                warn "Invalid choice."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+handle_custom_menu() {
+    # Initialize custom settings
+    CUSTOM_HOURS=""
+    CUSTOM_TOP="$DEFAULT_TOP"
+    CUSTOM_OTHER_MIN="$DEFAULT_OTHER_MIN"
+    CUSTOM_OTHER_MAX="$DEFAULT_OTHER_MAX"
+    CUSTOM_WORKERS="$DEFAULT_WORKERS"
+    CUSTOM_CATEGORIES=""
+    
+    while true; do
+        show_custom_menu
+        read_line choice
+        case $choice in
+            1)
+                # Lookback period - show quick options
+                echo ""
+                echo "  Quick options: 1=12h, 2=24h, 3=48h, 4=72h, 5=7days, 6=smart"
+                echo -n "  Enter choice or hours (1-720): "
+                read_line hours_input
+                case $hours_input in
+                    1) CUSTOM_HOURS="12" ;;
+                    2) CUSTOM_HOURS="24" ;;
+                    3) CUSTOM_HOURS="48" ;;
+                    4) CUSTOM_HOURS="72" ;;
+                    5) CUSTOM_HOURS="168" ;;
+                    6) CUSTOM_HOURS="" ;;
+                    *)
+                        if [[ "$hours_input" =~ ^[0-9]+$ ]] && [ "$hours_input" -ge 1 ] && [ "$hours_input" -le 720 ]; then
+                            CUSTOM_HOURS="$hours_input"
+                        else
+                            error "Invalid input."
+                            sleep 1
+                        fi
+                        ;;
+                esac
+                ;;
+            2)
+                echo ""
+                echo "  Quick options: 1=15, 2=20, 3=30, 4=40, 5=50"
+                echo -n "  Main articles count [1-5 or number]: "
+                read_line top_input
+                case $top_input in
+                    1) CUSTOM_TOP="15" ;;
+                    2) CUSTOM_TOP="20" ;;
+                    3) CUSTOM_TOP="30" ;;
+                    4) CUSTOM_TOP="40" ;;
+                    5) CUSTOM_TOP="50" ;;
+                    *)
+                        if [[ "$top_input" =~ ^[0-9]+$ ]]; then
+                            CUSTOM_TOP="$top_input"
+                        fi
+                        ;;
+                esac
+                ;;
+            3)
+                echo ""
+                echo "  Quick options: 1=10, 2=15, 3=25, 4=35, 5=50"
+                echo -n "  Worker count [1-5 or number]: "
+                read_line worker_input
+                case $worker_input in
+                    1) CUSTOM_WORKERS="10" ;;
+                    2) CUSTOM_WORKERS="15" ;;
+                    3) CUSTOM_WORKERS="25" ;;
+                    4) CUSTOM_WORKERS="35" ;;
+                    5) CUSTOM_WORKERS="50" ;;
+                    *)
+                        if [[ "$worker_input" =~ ^[0-9]+$ ]] && [ "$worker_input" -ge 1 ] && [ "$worker_input" -le 50 ]; then
+                            CUSTOM_WORKERS="$worker_input"
+                        else
+                            error "Invalid worker count."
+                            sleep 1
+                        fi
+                        ;;
+                esac
+                ;;
+            4)
+                handle_category_selector
+                ;;
+            5)
+                # Run
+                local args="--top $CUSTOM_TOP --other-min $CUSTOM_OTHER_MIN --other-max $CUSTOM_OTHER_MAX --workers $CUSTOM_WORKERS"
+                if [[ -n "$CUSTOM_HOURS" ]]; then
+                    args="$args --hours $CUSTOM_HOURS"
+                fi
+                if [[ -n "$CUSTOM_CATEGORIES" ]]; then
+                    args="$args --categories $CUSTOM_CATEGORIES"
+                fi
+                run_aggregator "$args"
+                wait_key
+                ;;
+            6)
+                # Show settings for copy/paste
+                echo ""
+                print_line
+                echo "  ${BOLD}Copy these to presets.json:${NC}"
+                echo ""
+                echo "  \"my_preset\": {"
+                echo "      \"name\": \"My Custom Preset\","
+                echo "      \"description\": \"Custom configuration\","
+                if [[ -n "$CUSTOM_HOURS" ]]; then
+                    echo "      \"hours\": $CUSTOM_HOURS,"
+                else
+                    echo "      \"hours\": null,"
+                fi
+                echo "      \"top_articles\": $CUSTOM_TOP,"
+                echo "      \"other_min\": $CUSTOM_OTHER_MIN,"
+                echo "      \"other_max\": $CUSTOM_OTHER_MAX,"
+                echo "      \"workers\": $CUSTOM_WORKERS,"
+                if [[ -n "$CUSTOM_CATEGORIES" ]]; then
+                    # Format categories as array
+                    local cats_json=$(echo "$CUSTOM_CATEGORIES" | sed 's/,/", "/g')
+                    echo "      \"categories\": [\"$cats_json\"]"
+                else
+                    echo "      \"categories\": [\"all\"]"
+                fi
+                echo "  }"
+                echo ""
+                print_line
+                wait_key
+                ;;
+            0) return ;;
+            *) warn "Invalid choice. Please try again."; sleep 1 ;;
+        esac
+    done
+}
+
+handle_manage_presets() {
+    while true; do
+        show_manage_presets_menu
+        read_line choice
+        case $choice in
+            1)
+                echo ""
+                python "$PY_SCRIPT" --list-presets
+                wait_key
+                ;;
+            2)
+                handle_custom_menu
+                ;;
+            3)
+                echo ""
+                info "Opening presets.json..."
+                if command -v code &>/dev/null; then
+                    code presets.json
+                elif command -v nano &>/dev/null; then
+                    nano presets.json
+                elif command -v vim &>/dev/null; then
+                    vim presets.json
+                else
+                    echo "Please edit presets.json with your preferred editor."
+                fi
+                wait_key
+                ;;
+            0) return ;;
+            *) warn "Invalid choice. Please try again."; sleep 1 ;;
+        esac
+    done
+}
+
+# =============================================================================
+# MAIN MENU LOOP
+# =============================================================================
+
+main_menu_loop() {
+    while true; do
+        show_main_menu
+        read_line choice
+        case $choice in
+            1)
+                run_aggregator "--top $DEFAULT_TOP --other-min $DEFAULT_OTHER_MIN --other-max $DEFAULT_OTHER_MAX --workers $DEFAULT_WORKERS"
+                wait_key
+                ;;
+            2) handle_presets_menu ;;
+            3) handle_custom_menu ;;
+            4) handle_lookback_menu ;;
+            5) handle_manage_presets ;;
+            6) show_help ;;
+            0)
+                echo ""
+                info "Goodbye!"
+                exit 0
+                ;;
+            *)
+                warn "Invalid choice. Please enter 0-6."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# =============================================================================
+# MAIN ENTRY POINT
+# =============================================================================
+
+# Parse arguments
+FORCE_MENU=false
+REMAINING_ARGS=()
+
+for arg in "$@"; do
+    case "$arg" in
+        --menu)
+            FORCE_MENU=true
+            ;;
+        --help|-h|--list-presets)
+            # Pass through to Python directly
+            setup_environment
+            python "$PY_SCRIPT" "$@"
+            exit $?
+            ;;
+        *)
+            REMAINING_ARGS+=("$arg")
+            ;;
+    esac
 done
 
-echo "📰 News Aggregator v0.2 - Launcher"
-echo "========================================"
-echo "📁 Working directory: $SCRIPT_DIR"
-echo ""
-
-# Step 1: Create virtual environment if it doesn't exist
-if [ ! -d ".venv" ]; then
-    echo "📦 Creating virtual environment (first-time setup)..."
-    python3 -m venv .venv
-    echo "✓ Virtual environment created"
+# If we have arguments (and not forcing menu), run directly
+if [ ${#REMAINING_ARGS[@]} -gt 0 ] && [ "$FORCE_MENU" = false ]; then
+    echo "📰 News Aggregator v${VERSION}"
+    echo "========================================"
+    setup_environment
+    echo ""
+    run_aggregator "${REMAINING_ARGS[*]}"
+    echo ""
+    echo "TIP: Run ${CYAN}./run_ainews.sh${NC} for interactive menu"
+    exit 0
 fi
 
-# Step 2: Activate virtual environment
-# shellcheck disable=SC1091
-source .venv/bin/activate
-echo "✓ Virtual environment activated"
-
-# Step 3: Install/upgrade dependencies
-echo "📦 Checking dependencies..."
-python -m pip install --upgrade pip wheel setuptools -q
-pip install -r requirements.txt -q
-echo "✓ Dependencies OK"
-
-# Step 4: Build the command with settings
-# If no arguments provided, use defaults. Otherwise pass through to Python.
-if [ $# -eq 0 ]; then
-    # No arguments - use defaults
-    CMD="python \"$PY_SCRIPT\" --sources \"$SOURCES\""
-    CMD="$CMD --top $DEFAULT_TOP_ARTICLES"
-    CMD="$CMD --other-min $DEFAULT_OTHER_MIN --other-max $DEFAULT_OTHER_MAX"
-    CMD="$CMD --workers $DEFAULT_WORKERS"
-    echo "⚙️ Using default settings (30 articles, smart lookback)"
-else
-    # Arguments provided - pass them through to Python directly
-    CMD="python \"$PY_SCRIPT\" --sources \"$SOURCES\" $*"
-    echo "⚙️ Using custom settings: $*"
+# If forced menu mode, skip stdin check
+if [ "$FORCE_MENU" = true ]; then
+    setup_environment
+    main_menu_loop
+    exit 0
 fi
 
-# Step 5: Run the aggregator
-echo ""
-echo "🚀 Starting aggregator..."
-echo "========================================"
-eval "$CMD"
+# Check if we can show interactive menu
+# Even when piped (curl | bash), we can use /dev/tty for interaction
+if [ "$TTY_AVAILABLE" = false ]; then
+    # No TTY available - truly non-interactive (e.g., cron, no terminal)
+    echo "📰 News Aggregator v${VERSION}"
+    echo "========================================"
+    echo ""
+    echo "ℹ️  No terminal available - running with defaults"
+    echo ""
+    setup_environment
+    run_aggregator "--top $DEFAULT_TOP --other-min $DEFAULT_OTHER_MIN --other-max $DEFAULT_OTHER_MAX --workers $DEFAULT_WORKERS"
+    exit 0
+fi
 
-echo ""
-echo "========================================"
-echo "✅ Complete!"
-echo ""
-echo "TIPS:"
-echo "  • Run with --list-presets to see all available presets"
-echo ""
-echo "AVAILABLE PRESETS:"
-echo "  --preset default        Full coverage, smart lookback"
-echo "  --preset ai_focus       AI/ML headlines (48h, 25 articles)"
-echo "  --preset finance        Finance & Crypto (24h, 30 articles)"
-echo "  --preset cybersecurity  Security news (48h, 20 articles)"
-echo "  --preset world          World & Politics (48h, 25 articles)"
-echo "  --preset quick_update   Fast summary (24h, 15 articles)"
-echo "  --preset deep_dive      Full week (168h, 50 articles)"
-echo ""
-echo "CUSTOMIZATION:"
-echo "  • Edit sources.txt to add/remove news sources"
-echo "  • Edit presets.json to customize or add presets"
+# Interactive mode - TTY is available (works even when piped via curl)
+setup_environment
+main_menu_loop

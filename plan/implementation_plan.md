@@ -1,6 +1,6 @@
 # News Aggregator - Roadmap v0.2+
 
-> **Version**: 2.0 | **Date**: 2025-12-18 | **Status**: Phase 1 Implemented ✅
+> **Version**: 2.0 | **Date**: 2025-12-19 | **Status**: Phase 1 ✅ Phase 2 ✅
 
 ---
 
@@ -93,22 +93,36 @@ Transform the aggregator into a system that:
 
 ---
 
-## 🔜 Phase 2: Interactive Launcher (v0.2.x) - ~2 weeks
+## ✅ Phase 2 Complete - Interactive Launcher (v0.2.x)
 
 **Focus**: Full interactive menu system
 
-| Task | Priority | Effort |
-|------|----------|--------|
-| Create interactive menu framework (bash) | 🔴 High | 4h |
-| Implement main menu | 🔴 High | 2h |
-| Implement Quick Presets menu | 🔴 High | 3h |
-| Add custom run configuration flow | 🟡 Medium | 3h |
-| Add "Save as Preset" functionality | 🟡 Medium | 2h |
-| Add lookback period quick-set | 🟡 Medium | 2h |
-| Add help/documentation display | 🟢 Low | 1h |
-| Terminal color/emoji detection | 🟢 Low | 1h |
+### Completed Tasks
 
-**Deliverable**: Beautiful interactive launcher with preset management
+| Task | Status |
+|------|--------|
+| Create interactive menu framework (bash) | ✅ Done |
+| Implement main menu with 6 options | ✅ Done |
+| Implement Quick Presets menu (7 presets) | ✅ Done |
+| Add custom run configuration flow | ✅ Done |
+| Add "Save as Preset" info display | ✅ Done |
+| Add lookback period quick-set menu | ✅ Done |
+| Add help/documentation display | ✅ Done |
+| Terminal color/emoji detection | ✅ Done |
+| Direct CLI passthrough (skip menu) | ✅ Done |
+
+### Features Implemented
+
+- **Main Menu**: 6 options with emoji icons and color formatting
+- **Quick Presets**: All 7 presets accessible from menu
+- **Custom Run**: Configure hours, articles, workers, categories interactively
+- **Lookback Menu**: Quick selection from 12h to 30 days, plus custom input
+- **Preset Management**: List presets, open editor
+- **Help Screen**: Usage tips and file documentation
+- **Smart Mode Detection**: Menu for no-args, direct run for CLI args
+- **Color Support**: Auto-detects terminal capabilities
+
+**Deliverable**: Beautiful interactive launcher with preset management ✅
 
 ---
 

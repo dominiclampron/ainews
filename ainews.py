@@ -20,6 +20,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import warnings
@@ -48,8 +49,8 @@ warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 # CONFIGURATION & CONSTANTS
 # =============================================================================
 
-VERSION = "0.2"
-UA = "Mozilla/5.0 (X11; Linux x86_64) NewsAggregator/0.2"
+VERSION = "0.3"
+UA = "Mozilla/5.0 (X11; Linux x86_64) NewsAggregator/0.3"
 PRESETS_FILE = "presets.json"
 HEADERS = {
     "User-Agent": UA,
@@ -1353,5 +1354,24 @@ Examples:
     # Auto-open in browser
     open_in_browser(args.out)
 
+
+def signal_handler(signum, frame):
+    """Handle Ctrl+C gracefully."""
+    print("\n")
+    print("⚠️  Interrupted by user (Ctrl+C)")
+    print("   Exiting gracefully...")
+    sys.exit(130)  # Standard exit code for SIGINT
+
+
 if __name__ == "__main__":
-    main()
+    # Set up signal handlers for graceful exit
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n")
+        print("⚠️  Interrupted by user (Ctrl+C)")
+        print("   Exiting gracefully...")
+        sys.exit(130)

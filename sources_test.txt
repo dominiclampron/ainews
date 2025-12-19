@@ -1,0 +1,11 @@
+# Minimal test sources for quick testing
+# Only 8 fast, reliable feeds
+
+https://openai.com/blog/rss/
+https://techcrunch.com/feed/
+https://www.theverge.com/rss/index.xml
+https://feeds.arstechnica.com/arstechnica/index
+https://krebsonsecurity.com/feed/
+https://news.ycombinator.com/rss
+https://cointelegraph.com/rss
+https://www.cnbc.com/id/10001147/device/rss/rss.html

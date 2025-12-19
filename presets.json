@@ -1,6 +1,6 @@
 {
     "_comment": "News Aggregator Presets - Edit to customize your news experience",
-    "_version": "0.2",
+    "_version": "0.3",
     "default": {
         "name": "Full Coverage",
         "description": "All categories, smart lookback from last run",

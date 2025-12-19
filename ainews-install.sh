@@ -35,7 +35,7 @@ set -euo pipefail
 REPO_URL="https://github.com/dominiclampron/ainews.git"
 INSTALL_DIR="${AINEWS_HOME:-$HOME/ainews}"
 MARKER_FILE=".ainews_installed"
-VERSION="0.2"
+VERSION="0.3"
 
 # =============================================================================
 # COLORS (auto-disable if not a terminal)
@@ -140,7 +140,7 @@ else
     
     # Create marker file with installation metadata
     cat > "$INSTALL_DIR/$MARKER_FILE" << EOF
-installed_at=$(date -Iseconds)
+installed_at=$(date '+%Y-%m-%dT%H:%M:%S%z')
 installed_by=ainews-install.sh
 version=$VERSION
 EOF
