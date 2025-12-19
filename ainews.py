@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-News Aggregator v0.1 - Intelligent News Curation
+News Aggregator v0.2 - Intelligent News Curation
 Features:
-- 8-category classification system
+- 10-category classification system (AI, Finance, Crypto, etc.)
+- Preset-based configuration system
 - Multi-factor intelligent scoring
 - Source diversity enforcement
 - Top 30 + 10-20 "Other Interesting" articles
@@ -14,6 +15,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import json
 import os
 import platform
 import re
@@ -24,7 +26,8 @@ import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Any
 from urllib.parse import urlparse, urljoin, urlunparse, parse_qsl, urlencode
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
@@ -45,8 +48,9 @@ warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 # CONFIGURATION & CONSTANTS
 # =============================================================================
 
-VERSION = "0.1"
-UA = "Mozilla/5.0 (X11; Linux x86_64) NewsAggregator/0.1"
+VERSION = "0.2"
+UA = "Mozilla/5.0 (X11; Linux x86_64) NewsAggregator/0.2"
+PRESETS_FILE = "presets.json"
 HEADERS = {
     "User-Agent": UA,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -74,6 +78,10 @@ SOURCE_TIERS = {
         "hackernoon.com": 0.68, "analyticsindiamag.com": 0.70,
         "krebsonsecurity.com": 0.85, "bleepingcomputer.com": 0.78,
         "thehackernews.com": 0.75, "schneier.com": 0.82,
+        # Finance sources
+        "cnbc.com": 0.88, "marketwatch.com": 0.85, "seekingalpha.com": 0.75,
+        # Crypto sources
+        "coindesk.com": 0.80, "cointelegraph.com": 0.78, "decrypt.co": 0.75,
     },
     # Tier 4: Community/Aggregators (0.50-0.64)
     "tier_4": {
@@ -82,7 +90,7 @@ SOURCE_TIERS = {
     },
 }
 
-# 8 Category System with Keywords
+# 10 Category System with Keywords (v0.2: added Finance & Crypto)
 CATEGORIES = {
     "ai_headlines": {
         "icon": "📰",
@@ -104,6 +112,20 @@ CATEGORIES = {
         "keywords_high": ["ai act", "regulation", "alignment", "safety research", "ai policy", "ethics board"],
         "keywords_medium": ["ethical ai", "responsible ai", "bias", "fairness", "transparency", "audit", "compliance"],
         "keywords_low": ["policy", "governance", "safety", "ethics", "nist", "oecd", "watermark"],
+    },
+    "finance_markets": {
+        "icon": "💹",
+        "title": "Finance & Markets",
+        "keywords_high": ["stock market", "wall street", "fed rate", "interest rate", "earnings report", "market crash", "bull market", "bear market"],
+        "keywords_medium": ["nasdaq", "s&p 500", "dow jones", "stock price", "trading", "investors", "hedge fund", "etf"],
+        "keywords_low": ["market", "stocks", "shares", "portfolio", "dividend", "bonds", "yield"],
+    },
+    "crypto_blockchain": {
+        "icon": "₿",
+        "title": "Crypto & Blockchain",
+        "keywords_high": ["bitcoin", "ethereum", "crypto crash", "btc", "eth", "sec crypto", "defi", "nft"],
+        "keywords_medium": ["blockchain", "cryptocurrency", "altcoin", "binance", "coinbase", "stablecoin", "web3"],
+        "keywords_low": ["crypto", "token", "wallet", "mining", "halving", "memecoin"],
     },
     "cybersecurity": {
         "icon": "🔐",
@@ -151,6 +173,9 @@ IMPORTANCE_KEYWORDS = {
     "anthropic": 0.11, "deepmind": 0.10, "apple": 0.09, "amazon": 0.08,
     "breach": 0.14, "hack": 0.13, "vulnerability": 0.12, "ransomware": 0.15,
     "lawsuit": 0.13, "acquisition": 0.14, "ipo": 0.15, "layoffs": 0.12,
+    # Finance & Crypto keywords
+    "bitcoin": 0.12, "ethereum": 0.11, "crypto crash": 0.16, "fed rate": 0.14,
+    "market crash": 0.18, "all-time high": 0.15, "record high": 0.14,
 }
 
 # Thread-safe locks
@@ -371,6 +396,8 @@ def generate_why_matters(category: str, title: str) -> str:
         "ai_headlines": "Signals shifts in AI capabilities, competitive landscape, or adoption patterns.",
         "tools_platforms": "New tools can reduce cost, raise capability, or unlock new product patterns.",
         "governance_safety": "Policy changes can alter what models/hardware can be built, shipped, or deployed.",
+        "finance_markets": "Market movements affect investment, funding, and tech valuations.",
+        "crypto_blockchain": "Crypto trends impact fintech, regulation, and decentralized technology adoption.",
         "cybersecurity": "Security incidents affect trust, compliance posture, and vendor choices.",
         "tech_industry": "Market signals affect funding, compute availability, and deployment timelines.",
         "politics_policy": "Political decisions shape regulatory environment and innovation landscape.",
@@ -1075,30 +1102,119 @@ def calculate_lookback_period() -> tuple[dt.datetime, dt.datetime]:
     
     return start, end
 
+# =============================================================================
+# PRESET LOADING
+# =============================================================================
+
+def load_presets() -> dict[str, Any]:
+    """Load presets from presets.json file."""
+    presets_path = Path(__file__).parent / PRESETS_FILE
+    if presets_path.exists():
+        try:
+            with open(presets_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Remove comment keys
+            return {k: v for k, v in data.items() if not k.startswith("_")}
+        except Exception as e:
+            print(f"⚠️ Could not load presets: {e}")
+    return {}
+
+def get_preset(name: str) -> Optional[dict[str, Any]]:
+    """Get a specific preset by name."""
+    presets = load_presets()
+    return presets.get(name)
+
+def list_presets() -> list[str]:
+    """List available preset names."""
+    return list(load_presets().keys())
+
 def main():
-    ap = argparse.ArgumentParser(description="AI/ML News Aggregator v5 - Intelligent Curation")
+    ap = argparse.ArgumentParser(
+        description="News Aggregator v0.2 - Intelligent Curation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python ainews.py                     # Use smart lookback from last run
+  python ainews.py --preset ai_focus   # Use AI/ML preset
+  python ainews.py --hours 24 --top 15 # Quick 24h summary
+  python ainews.py --list-presets      # Show available presets
+        """
+    )
     ap.add_argument("--sources", default="sources.txt")
-    ap.add_argument("--hours", type=int, default=None, help="Override lookback hours (ignores last_ran_date.txt)")
-    ap.add_argument("--top", type=int, default=30, help="Top articles count")
-    ap.add_argument("--other-min", type=int, default=10)
-    ap.add_argument("--other-max", type=int, default=20)
-    ap.add_argument("--workers", type=int, default=25)
+    ap.add_argument("--preset", type=str, default=None, 
+                    help="Use a preset configuration (e.g., ai_focus, finance, quick_update)")
+    ap.add_argument("--list-presets", action="store_true", help="List available presets and exit")
+    ap.add_argument("--hours", type=int, default=None, 
+                    help="Override lookback hours (ignores last_ran_date.txt)")
+    ap.add_argument("--top", type=int, default=None, help="Top articles count")
+    ap.add_argument("--other-min", type=int, default=None)
+    ap.add_argument("--other-max", type=int, default=None)
+    ap.add_argument("--workers", type=int, default=None)
+    ap.add_argument("--categories", type=str, default=None,
+                    help="Comma-separated list of categories to include (e.g., ai_headlines,finance_markets)")
     
     timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     ap.add_argument("--out", default=f"ainews_{timestamp}.html")
     args = ap.parse_args()
     
+    # Handle --list-presets
+    if args.list_presets:
+        presets = load_presets()
+        print("📋 Available Presets:")
+        print("=" * 50)
+        for name, config in presets.items():
+            desc = config.get("description", config.get("name", ""))
+            hours = config.get("hours")
+            hours_str = "smart" if hours is None else f"{hours}"
+            top = config.get("top_articles", 30)
+            print(f"  {name:15} | {hours_str:>5}h | {top} articles | {desc}")
+        print()
+        print("Usage: python ainews.py --preset <name>")
+        sys.exit(0)
+    
     print(f"📰 News Aggregator v{VERSION}")
     print()
     
+    # Load preset if specified
+    preset_config = {}
+    if args.preset:
+        preset_config = get_preset(args.preset)
+        if not preset_config:
+            print(f"❌ Unknown preset: {args.preset}")
+            print(f"   Available: {', '.join(list_presets())}")
+            sys.exit(1)
+        print(f"📋 Using preset: {preset_config.get('name', args.preset)}")
+    
+    # Apply preset values, CLI args override preset
+    top_n = args.top or preset_config.get("top_articles", 30)
+    other_min = args.other_min if args.other_min is not None else preset_config.get("other_min", 10)
+    other_max = args.other_max if args.other_max is not None else preset_config.get("other_max", 20)
+    workers = args.workers or preset_config.get("workers", 25)
+    hours_override = args.hours or preset_config.get("hours")  # None means use smart lookback
+    
+    # Category filtering
+    active_categories = None  # None means all
+    if args.categories:
+        active_categories = [c.strip() for c in args.categories.split(",")]
+    elif preset_config.get("categories") and preset_config["categories"] != ["all"]:
+        active_categories = preset_config["categories"]
+    
+    if active_categories:
+        valid_cats = [c for c in active_categories if c in CATEGORIES]
+        if valid_cats:
+            print(f"🏷️ Categories: {', '.join(valid_cats)}")
+            active_categories = valid_cats
+        else:
+            active_categories = None  # Fall back to all
+    
     # Calculate lookback period
-    if args.hours:
-        # Manual override
-        start = now_utc() - dt.timedelta(hours=args.hours)
+    if hours_override:
+        # Manual override or preset hours
+        start = now_utc() - dt.timedelta(hours=hours_override)
         end = now_utc()
-        print(f"⏰ Manual override: {args.hours}h lookback")
+        print(f"⏰ Lookback: {hours_override}h")
     else:
-        # Use smart lookback based on last run
+        # Use smart lookback based on last run (only for default preset)
         start, end = calculate_lookback_period()
     
     print(f"📅 {start.strftime('%Y-%m-%d %H:%M')} → {end.strftime('%Y-%m-%d %H:%M')} UTC")
@@ -1127,10 +1243,10 @@ def main():
     print(f"✓ Found {len(feed_list)} feeds")
     
     # Collect articles
-    print(f"\n📥 Fetching articles ({args.workers} workers)...")
+    print(f"\n📥 Fetching articles ({workers} workers)...")
     all_articles = []
     
-    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         tasks = [(url, dom, start, end, resolve_cache) for url, dom in feed_list]
         futures = {executor.submit(process_feed, t): t for t in tasks}
         
@@ -1164,15 +1280,23 @@ def main():
                     pass
                 pbar.update(1)
     
+    # Filter by active categories if specified
+    if active_categories:
+        all_articles = [a for a in all_articles if a.category in active_categories]
+        print(f"✓ {len(all_articles)} articles in selected categories")
+    
     # Select articles
     print("\n📊 Selecting articles...")
-    top_articles = select_top_articles(all_articles, top_n=args.top)
-    other_articles = select_other_interesting(all_articles, top_articles, args.other_min, args.other_max)
+    top_articles = select_top_articles(all_articles, top_n=top_n)
+    other_articles = select_other_interesting(all_articles, top_articles, other_min, other_max)
     
     print(f"✓ Selected {len(top_articles)} main + {len(other_articles)} other")
     
+    # Determine which categories to show (only those with articles or all if no filter)
+    display_categories = CATEGORIES if not active_categories else {k: v for k, v in CATEGORIES.items() if k in active_categories}
+    
     # Build sections
-    sections = {cat: [] for cat in CATEGORIES}
+    sections = {cat: [] for cat in display_categories}
     for article in top_articles:
         sections[article.category].append({
             "title": article.title,
@@ -1205,7 +1329,7 @@ def main():
         total_main=len(top_articles),
         total_other=len(other_articles),
         unique_sources=unique_sources,
-        categories=CATEGORIES,
+        categories=display_categories,
         sections=sections,
         other_articles=other_list,
         generated_at=now_utc().strftime("%Y-%m-%d %H:%M UTC"),
@@ -1221,8 +1345,8 @@ def main():
     print(f"📌 Updated {LAST_RAN_FILE} for next run")
     
     print(f"\n📈 Category breakdown:")
-    for cat, data in CATEGORIES.items():
-        count = len(sections[cat])
+    for cat, data in display_categories.items():
+        count = len(sections.get(cat, []))
         if count:
             print(f"   {data['icon']} {data['title']}: {count}")
     

@@ -1,0 +1,95 @@
+{
+    "_comment": "News Aggregator Presets - Edit to customize your news experience",
+    "_version": "0.2",
+    "default": {
+        "name": "Full Coverage",
+        "description": "All categories, smart lookback from last run",
+        "categories": [
+            "all"
+        ],
+        "hours": null,
+        "top_articles": 30,
+        "other_min": 10,
+        "other_max": 20,
+        "workers": 25
+    },
+    "ai_focus": {
+        "name": "AI/ML Focus",
+        "description": "AI headlines, tools, and governance only",
+        "categories": [
+            "ai_headlines",
+            "tools_platforms",
+            "governance_safety"
+        ],
+        "hours": 48,
+        "top_articles": 25,
+        "other_min": 10,
+        "other_max": 15,
+        "workers": 25
+    },
+    "finance": {
+        "name": "Finance & Markets",
+        "description": "Finance, crypto, and tech industry news",
+        "categories": [
+            "finance_markets",
+            "crypto_blockchain",
+            "tech_industry"
+        ],
+        "hours": 24,
+        "top_articles": 30,
+        "other_min": 10,
+        "other_max": 15,
+        "workers": 25
+    },
+    "cybersecurity": {
+        "name": "Cybersecurity Brief",
+        "description": "Security-focused news digest",
+        "categories": [
+            "cybersecurity",
+            "tech_industry"
+        ],
+        "hours": 48,
+        "top_articles": 20,
+        "other_min": 10,
+        "other_max": 15,
+        "workers": 25
+    },
+    "world": {
+        "name": "World News & Politics",
+        "description": "Global news and policy developments",
+        "categories": [
+            "world_news",
+            "politics_policy",
+            "viral_trending"
+        ],
+        "hours": 48,
+        "top_articles": 25,
+        "other_min": 10,
+        "other_max": 15,
+        "workers": 25
+    },
+    "quick_update": {
+        "name": "Quick Update",
+        "description": "Fast 24h summary, fewer articles",
+        "categories": [
+            "all"
+        ],
+        "hours": 24,
+        "top_articles": 15,
+        "other_min": 5,
+        "other_max": 10,
+        "workers": 25
+    },
+    "deep_dive": {
+        "name": "Deep Dive",
+        "description": "Full week coverage, comprehensive report",
+        "categories": [
+            "all"
+        ],
+        "hours": 168,
+        "top_articles": 50,
+        "other_min": 20,
+        "other_max": 30,
+        "workers": 25
+    }
+}

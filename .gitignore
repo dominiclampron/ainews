@@ -15,7 +15,9 @@ ainews_*.html
 
 # Runtime files
 last_ran_date.txt
+.ainews_installed
 cache/
+data/
 
 # IDE
 .vscode/

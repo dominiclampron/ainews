@@ -173,29 +173,30 @@ https://aihub.org/feed?cat=-473
 https://deepmind.google/discover/blog/
 
 # ============================================
-# CYBERSECURITY SOURCES (Added for v5)
+# CYBERSECURITY SOURCES (Added for v0.1)
 # ============================================
 https://krebsonsecurity.com/feed/
 https://www.bleepingcomputer.com/feed/
 https://thehackernews.com/feeds/posts/default
 https://www.schneier.com/feed/
-https://nakedsecurity.sophos.com/feed/
+# https://nakedsecurity.sophos.com/feed/
 https://www.cyberscoop.com/feed/
-https://portswigger.net/daily-swig/rss
-https://threatpost.com/feed/
+# https://portswigger.net/daily-swig/rss
+# https://threatpost.com/feed/
 https://www.securityweek.com/feed/
+https://www.cybersecuritydive.com/feeds/news/
 
 # ============================================
-# POLITICS & POLICY SOURCES (Added for v5)
+# POLITICS & POLICY SOURCES (Added for v0.1)
 # ============================================
 https://www.politico.com/rss/technology.xml
 https://thehill.com/feed/
-https://www.axios.com/technology/feed
-https://www.lawfaremedia.org/rss.xml
-https://www.brookings.edu/topic/technology-innovation/feed/
+# https://www.axios.com/technology/feed
+# https://www.lawfaremedia.org/rss.xml
+# https://www.brookings.edu/topic/technology-innovation/feed/
 
 # ============================================
-# WORLD NEWS & TECH SOURCES (Added for v5)
+# WORLD NEWS & TECH SOURCES (Added for v0.1)
 # ============================================
 https://feeds.bbci.co.uk/news/technology/rss.xml
 https://technode.com/feed/
@@ -203,8 +204,33 @@ https://asia.nikkei.com/rss/feed/nar
 https://www.scmp.com/rss/4/feed
 
 # ============================================
-# VIRAL & TRENDING SOURCES (Added for v5)
+# VIRAL & TRENDING SOURCES (Added for v0.1)
 # ============================================
 https://news.ycombinator.com/rss
 https://www.reddit.com/r/technology/.rss
 https://www.reddit.com/r/Futurology/.rss
+
+# ============================================
+# AI (added during v0.1)
+# ============================================
+https://www.humai.blog/tag/news/
+
+# ============================================
+# FINANCE & MARKETS (Added for v0.2)
+# ============================================
+https://www.cnbc.com/id/10001147/device/rss/rss.html
+https://www.cnbc.com/id/20910258/device/rss/rss.html
+https://feeds.finance.yahoo.com/rss/2.0/headline
+https://www.marketwatch.com/rss/topstories
+https://seekingalpha.com/feed.xml
+https://feeds.bloomberg.com/markets/news.rss
+https://www.investopedia.com/feeds/feedburner/investopedia
+
+# ============================================
+# CRYPTO & BLOCKCHAIN (Added for v0.2)
+# ============================================
+https://cointelegraph.com/rss
+https://coindesk.com/arc/outboundfeeds/rss/
+https://decrypt.co/feed
+https://bitcoinmagazine.com/feed
+https://cryptopotato.com/feed/

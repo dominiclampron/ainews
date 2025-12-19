@@ -1,16 +1,50 @@
-# 📰 News Aggregator v0.1
+# 📰 News Aggregator v0.2
 
-An intelligent news aggregation system that curates the most important AI, tech, cybersecurity, and world news from 190+ sources.
+An intelligent news aggregation system that curates the most important AI, tech, finance, crypto, cybersecurity, and world news from 200+ sources.
 
 ## ✨ Features
 
-- **8-Category Classification**: AI/ML, Tools, Governance, Cybersecurity, Tech Industry, Politics, World News, Viral
+- **10-Category Classification**: AI/ML, Tools, Governance, Finance, Crypto, Cybersecurity, Tech Industry, Politics, World News, Viral
+- **Preset System**: Quick presets for different use cases (AI focus, Finance, Quick Update, Deep Dive)
 - **Intelligent Scoring**: Multi-factor algorithm considering recency, importance, and source reputation
-- **Source Diversity**: Balanced representation from 190+ trusted sources
+- **Source Diversity**: Balanced representation from 200+ trusted sources
 - **Smart Lookback**: Remembers last run date, automatically fetches new articles since then
 - **Dark Mode UI**: Beautiful, modern dark theme output
 - **Auto-Open Browser**: Automatically opens report in Chrome/Safari/default browser
 - **Parallel Processing**: 25 concurrent workers for fast fetching
+
+---
+
+## 🚀 Quick Start
+
+### One Command Install & Run
+
+```bash
+curl -fsSL https://github.com/dominiclampron/ainews/releases/latest/download/ainews-install.sh | bash
+```
+
+That's it! The script will:
+1. Clone the repository (first run only)
+2. Set up Python virtual environment
+3. Install dependencies
+4. Launch the aggregator
+5. Open your news report in the browser
+
+### With Options
+
+```bash
+# Use AI/ML preset
+curl -fsSL https://...ainews-install.sh | bash -s -- --preset ai_focus
+
+# Quick 24h summary
+curl -fsSL https://...ainews-install.sh | bash -s -- --hours 24 --top 15
+
+# Update to latest version before running
+curl -fsSL https://...ainews-install.sh | bash -s -- --update
+
+# Update AND use a preset
+curl -fsSL https://...ainews-install.sh | bash -s -- --update --preset finance
+```
 
 ---
 
@@ -25,71 +59,110 @@ An intelligent news aggregation system that curates the most important AI, tech,
 
 ---
 
-## 🚀 Quick Start
+## 🛠️ Developer Setup
 
-### Step 1: Make the launcher executable (first time only)
-```bash
-chmod +x run_ainews.sh
-```
+For contributors or advanced users who want to clone directly:
 
-### Step 2: Run it!
 ```bash
+# Clone the repository
+git clone https://github.com/dominiclampron/ainews.git
+cd ainews
+
+# Run with default settings
 ./run_ainews.sh
+
+# Or with options
+./run_ainews.sh --preset ai_focus
 ```
 
-That's it! The launcher will:
-1. Create a virtual environment (first run only)
-2. Install all Python dependencies
-3. Fetch and curate news articles
-4. Generate a beautiful HTML report
-5. Open it in your browser automatically
+### Show Available Presets
+
+```bash
+./run_ainews.sh --list-presets
+```
 
 ---
 
-## ⚙️ Customization
+## 📋 Available Presets
 
-### Easy Way: Edit `run_ainews.sh`
+| Preset | Hours | Articles | Categories | Description |
+|--------|-------|----------|------------|-------------|
+| `default` | smart* | 30 | All | Full coverage with smart lookback |
+| `ai_focus` | 48h | 25 | AI, Tools, Governance | AI/ML headlines and developments |
+| `finance` | 24h | 30 | Finance, Crypto, Tech | Markets, stocks, and crypto news |
+| `cybersecurity` | 48h | 20 | Cyber, Tech | Security threats and vulnerabilities |
+| `world` | 48h | 25 | World, Politics, Viral | Global news and policy |
+| `quick_update` | 24h | 15 | All | Fast summary, fewer articles |
+| `deep_dive` | 168h | 50 | All | Full week comprehensive report |
 
-Open the launcher script and look for the **CONFIGURATION** section:
+*smart = Uses time since last run (24h minimum, 30 days maximum)
+
+### Preset Usage Examples
 
 ```bash
-# Number of main articles (default: 30)
-TOP_ARTICLES=30
+# Via curl installer
+curl -fsSL https://...ainews-install.sh | bash -s -- --preset ai_focus
+curl -fsSL https://...ainews-install.sh | bash -s -- --preset finance
+curl -fsSL https://...ainews-install.sh | bash -s -- --preset quick_update
 
-# "Other Interesting" section range
-OTHER_MIN=10
-OTHER_MAX=20
+# Via launcher script
+./run_ainews.sh --preset ai_focus
+./run_ainews.sh --preset cybersecurity
+./run_ainews.sh --preset deep_dive
 
-# Parallel workers (lower if connection issues)
-WORKERS=25
-
-# Manual lookback override (leave empty for smart mode)
-HOURS_OVERRIDE=""
+# Via Python directly
+python3 ainews.py --preset world
+python3 ainews.py --preset finance --hours 12  # Override preset hours
 ```
 
-### Advanced: Command Line Options
+---
+
+## ⚙️ Command Line Options
 
 ```bash
 python3 ainews.py [OPTIONS]
 
-Options:
-  --sources FILE    Source URLs file (default: sources.txt)
-  --hours N         Override lookback period in hours
-  --top N           Number of main articles (default: 30)
-  --other-min N     Min "Other Interesting" articles (default: 10)
-  --other-max N     Max "Other Interesting" articles (default: 20)
-  --workers N       Parallel fetch workers (default: 25)
-  --out FILE        Output filename (default: auto-timestamped)
+Preset Options:
+  --preset NAME      Use a preset: default, ai_focus, finance, cybersecurity,
+                     world, quick_update, deep_dive
+  --list-presets     List all available presets and exit
+
+Filter Options:
+  --categories LIST  Comma-separated categories to include
+                     (e.g., ai_headlines,finance_markets,crypto_blockchain)
+  --hours N          Override lookback period in hours
+
+Output Options:
+  --top N            Number of main articles (default: 30)
+  --other-min N      Min "Other Interesting" articles (default: 10)
+  --other-max N      Max "Other Interesting" articles (default: 20)
+  --out FILE         Output filename (default: auto-timestamped)
+
+Performance Options:
+  --sources FILE     Source URLs file (default: sources.txt)
+  --workers N        Parallel fetch workers (default: 25)
 ```
 
 ### Examples
 
 ```bash
-# Quick update - last 24 hours, fewer articles
-python3 ainews.py --hours 24 --top 15
+# Quick AI-only update
+python3 ainews.py --preset ai_focus
 
-# Deep dive - last week, more articles
-python3 ainews.py --hours 168 --top 50 --other-max 30
+# Finance & Crypto focus
+python3 ainews.py --preset finance
+
+# World news and politics
+python3 ainews.py --preset world
+
+# Cybersecurity brief
+python3 ainews.py --preset cybersecurity
+
+# Deep dive - last week, comprehensive
+python3 ainews.py --preset deep_dive
+
+# Specific categories only (custom filter)
+python3 ainews.py --categories ai_headlines,crypto_blockchain
 
 # Fast mode - fewer workers for slow connections
 python3 ainews.py --workers 10
@@ -100,14 +173,17 @@ python3 ainews.py --workers 10
 ## 📁 File Structure
 
 ```
-project/
-├── ainews.py           # Main aggregator script (don't edit unless developing)
-├── sources.txt         # News source URLs (edit to add/remove sources)
+ainews/
+├── ainews-install.sh   # Curl one-liner installer
+├── run_ainews.sh       # Launcher script (edit for defaults)
+├── ainews.py           # Main aggregator script
+├── presets.json        # Preset configurations (edit to customize)
+├── sources.txt         # News source URLs (edit to add/remove)
 ├── requirements.txt    # Python dependencies (auto-installed)
-├── run_ainews.sh       # Launcher script (edit for customization)
 ├── README.md           # This file
 ├── .gitignore          # Git ignore rules
 │
+├── .ainews_installed   # Auto-created: installation marker
 ├── last_ran_date.txt   # Auto-created: tracks last run time
 ├── cache/              # Auto-created: URL resolution cache
 └── ainews_*.html       # Auto-created: generated reports
@@ -118,9 +194,27 @@ project/
 | File | Safe to Edit? | Purpose |
 |------|---------------|---------|
 | `sources.txt` | ✅ Yes | Add/remove news sources |
+| `presets.json` | ✅ Yes | Create custom presets |
 | `run_ainews.sh` | ✅ Yes (config section) | Change default settings |
 | `ainews.py` | ⚠️ Careful | Core logic - only for developers |
 | `requirements.txt` | ❌ No | Auto-managed dependencies |
+
+---
+
+## 📰 Categories
+
+| Category | Icon | Description |
+|----------|------|-------------|
+| AI/ML Headlines | 📰 | OpenAI, Anthropic, DeepMind news |
+| Tools & Platforms | 🛠️ | New releases, frameworks, SDKs |
+| Governance & Safety | ⚖️ | AI policy, regulation, ethics |
+| Finance & Markets | 💹 | Stocks, markets, trading |
+| Crypto & Blockchain | ₿ | Bitcoin, Ethereum, DeFi |
+| Cybersecurity | 🔐 | Breaches, vulnerabilities, threats |
+| Tech Industry | 💻 | Funding, acquisitions, layoffs |
+| Politics & Policy | 🏛️ | Government, legislation |
+| World News | 🌍 | Global events, international |
+| Viral & Trending | 🔥 | Breaking, trending stories |
 
 ---
 
@@ -142,14 +236,6 @@ https://arstechnica.com
 https://www.reddit.com/r/MachineLearning/
 ```
 
-### Source Categories Already Included
-
-- **AI/ML**: OpenAI, Anthropic, DeepMind, Hugging Face, ArXiv
-- **Tech News**: TechCrunch, The Verge, Ars Technica, Wired
-- **Cybersecurity**: Krebs, Bleeping Computer, The Hacker News
-- **Business**: Bloomberg, Reuters, Business Insider
-- **Policy**: Politico Tech, The Hill, Axios
-
 ---
 
 ## 🔄 How Smart Lookback Works
@@ -163,6 +249,8 @@ The aggregator remembers when you last ran it (stored in `last_ran_date.txt`):
 | Ran 3 days ago | 3 days (from last run) |
 | Ran 45 days ago | 30 days (maximum cap) |
 
+**Note**: Smart lookback only applies when using default settings. Presets use their configured hours.
+
 **Override anytime** with `--hours N` to manually specify the period.
 
 ---
@@ -171,7 +259,7 @@ The aggregator remembers when you last ran it (stored in `last_ran_date.txt`):
 
 ### "Permission denied" when running script
 ```bash
-chmod +x run_ainews.sh
+chmod +x run_ainews.sh ainews-install.sh
 ```
 
 ### Dependencies not installing
