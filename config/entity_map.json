@@ -1,0 +1,350 @@
+{
+    "_comment": "Entity-to-category boost mappings. Used by precision mode (spaCy NER).",
+    "_version": "0.7.1",
+    "ORG": {
+        "OpenAI": {
+            "category": "ai_headlines",
+            "boost": 0.9,
+            "aliases": [
+                "Open AI"
+            ]
+        },
+        "Anthropic": {
+            "category": "ai_headlines",
+            "boost": 0.9
+        },
+        "Google DeepMind": {
+            "category": "ai_headlines",
+            "boost": 0.9,
+            "aliases": [
+                "DeepMind"
+            ]
+        },
+        "NVIDIA": {
+            "category": "ai_headlines",
+            "boost": 0.8,
+            "aliases": [
+                "Nvidia"
+            ]
+        },
+        "Meta AI": {
+            "category": "ai_headlines",
+            "boost": 0.8
+        },
+        "Hugging Face": {
+            "category": "ai_headlines",
+            "boost": 0.8,
+            "aliases": [
+                "HuggingFace"
+            ]
+        },
+        "Stability AI": {
+            "category": "ai_headlines",
+            "boost": 0.8
+        },
+        "Midjourney": {
+            "category": "ai_headlines",
+            "boost": 0.7
+        },
+        "Cohere": {
+            "category": "ai_headlines",
+            "boost": 0.7
+        },
+        "xAI": {
+            "category": "ai_headlines",
+            "boost": 0.8
+        },
+        "CrowdStrike": {
+            "category": "cybersecurity",
+            "boost": 0.9,
+            "aliases": [
+                "Crowdstrike",
+                "CRWD"
+            ]
+        },
+        "Palo Alto Networks": {
+            "category": "cybersecurity",
+            "boost": 0.9
+        },
+        "Fortinet": {
+            "category": "cybersecurity",
+            "boost": 0.8
+        },
+        "Zscaler": {
+            "category": "cybersecurity",
+            "boost": 0.8
+        },
+        "SentinelOne": {
+            "category": "cybersecurity",
+            "boost": 0.8
+        },
+        "Mandiant": {
+            "category": "cybersecurity",
+            "boost": 0.8
+        },
+        "Recorded Future": {
+            "category": "cybersecurity",
+            "boost": 0.7
+        },
+        "Goldman Sachs": {
+            "category": "finance_markets",
+            "boost": 0.8
+        },
+        "JPMorgan": {
+            "category": "finance_markets",
+            "boost": 0.8,
+            "aliases": [
+                "JP Morgan",
+                "JPMorgan Chase"
+            ]
+        },
+        "Morgan Stanley": {
+            "category": "finance_markets",
+            "boost": 0.8
+        },
+        "BlackRock": {
+            "category": "finance_markets",
+            "boost": 0.8
+        },
+        "Citadel": {
+            "category": "finance_markets",
+            "boost": 0.7
+        },
+        "Federal Reserve": {
+            "category": "finance_markets",
+            "boost": 0.9,
+            "aliases": [
+                "Fed",
+                "The Fed"
+            ]
+        },
+        "Coinbase": {
+            "category": "crypto_blockchain",
+            "boost": 0.9
+        },
+        "Binance": {
+            "category": "crypto_blockchain",
+            "boost": 0.9
+        },
+        "Kraken": {
+            "category": "crypto_blockchain",
+            "boost": 0.8
+        },
+        "Circle": {
+            "category": "crypto_blockchain",
+            "boost": 0.7
+        },
+        "Tether": {
+            "category": "crypto_blockchain",
+            "boost": 0.8
+        },
+        "Apple": {
+            "category": "tech_industry",
+            "boost": 0.6
+        },
+        "Microsoft": {
+            "category": "tech_industry",
+            "boost": 0.6
+        },
+        "Google": {
+            "category": "tech_industry",
+            "boost": 0.5
+        },
+        "Amazon": {
+            "category": "tech_industry",
+            "boost": 0.5
+        },
+        "Meta": {
+            "category": "tech_industry",
+            "boost": 0.5
+        },
+        "Tesla": {
+            "category": "tech_industry",
+            "boost": 0.6
+        },
+        "FDA": {
+            "category": "health_biotech",
+            "boost": 0.8,
+            "aliases": [
+                "Food and Drug Administration"
+            ]
+        },
+        "CDC": {
+            "category": "health_biotech",
+            "boost": 0.8,
+            "aliases": [
+                "Centers for Disease Control"
+            ]
+        },
+        "WHO": {
+            "category": "health_biotech",
+            "boost": 0.7,
+            "aliases": [
+                "World Health Organization"
+            ]
+        },
+        "Pfizer": {
+            "category": "health_biotech",
+            "boost": 0.7
+        },
+        "Moderna": {
+            "category": "health_biotech",
+            "boost": 0.7
+        },
+        "NASA": {
+            "category": "science_research",
+            "boost": 0.8
+        },
+        "SpaceX": {
+            "category": "science_research",
+            "boost": 0.7
+        },
+        "CERN": {
+            "category": "science_research",
+            "boost": 0.8
+        },
+        "ESA": {
+            "category": "science_research",
+            "boost": 0.7,
+            "aliases": [
+                "European Space Agency"
+            ]
+        },
+        "EU Commission": {
+            "category": "governance_safety",
+            "boost": 0.7,
+            "aliases": [
+                "European Commission"
+            ]
+        },
+        "FTC": {
+            "category": "governance_safety",
+            "boost": 0.7,
+            "aliases": [
+                "Federal Trade Commission"
+            ]
+        },
+        "DOJ": {
+            "category": "governance_safety",
+            "boost": 0.6,
+            "aliases": [
+                "Department of Justice"
+            ]
+        }
+    },
+    "PRODUCT": {
+        "ChatGPT": {
+            "category": "ai_headlines",
+            "boost": 0.9
+        },
+        "GPT-4": {
+            "category": "ai_headlines",
+            "boost": 0.9,
+            "aliases": [
+                "GPT4",
+                "GPT-4o",
+                "GPT-5"
+            ]
+        },
+        "Claude": {
+            "category": "ai_headlines",
+            "boost": 0.8
+        },
+        "Gemini": {
+            "category": "ai_headlines",
+            "boost": 0.8
+        },
+        "DALL-E": {
+            "category": "ai_headlines",
+            "boost": 0.7,
+            "aliases": [
+                "DALLE",
+                "DALL-E 3"
+            ]
+        },
+        "Stable Diffusion": {
+            "category": "ai_headlines",
+            "boost": 0.7
+        },
+        "Midjourney": {
+            "category": "ai_headlines",
+            "boost": 0.7
+        },
+        "Sora": {
+            "category": "ai_headlines",
+            "boost": 0.8
+        },
+        "H100": {
+            "category": "ai_headlines",
+            "boost": 0.7
+        },
+        "A100": {
+            "category": "ai_headlines",
+            "boost": 0.7
+        },
+        "CUDA": {
+            "category": "ai_headlines",
+            "boost": 0.6
+        },
+        "TensorFlow": {
+            "category": "tools_platforms",
+            "boost": 0.6
+        },
+        "PyTorch": {
+            "category": "tools_platforms",
+            "boost": 0.6
+        },
+        "LangChain": {
+            "category": "tools_platforms",
+            "boost": 0.7
+        },
+        "Bitcoin": {
+            "category": "crypto_blockchain",
+            "boost": 0.9,
+            "aliases": [
+                "BTC"
+            ]
+        },
+        "Ethereum": {
+            "category": "crypto_blockchain",
+            "boost": 0.9,
+            "aliases": [
+                "ETH"
+            ]
+        },
+        "Solana": {
+            "category": "crypto_blockchain",
+            "boost": 0.8,
+            "aliases": [
+                "SOL"
+            ]
+        },
+        "XRP": {
+            "category": "crypto_blockchain",
+            "boost": 0.7
+        },
+        "Dogecoin": {
+            "category": "crypto_blockchain",
+            "boost": 0.6,
+            "aliases": [
+                "DOGE"
+            ]
+        }
+    },
+    "GPE": {
+        "Silicon Valley": {
+            "category": "tech_industry",
+            "boost": 0.5
+        },
+        "Wall Street": {
+            "category": "finance_markets",
+            "boost": 0.6
+        }
+    },
+    "MONEY": {
+        "_default": {
+            "category": "finance_markets",
+            "boost": 0.3
+        }
+    }
+}

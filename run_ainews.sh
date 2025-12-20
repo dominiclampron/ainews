@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# News Aggregator v0.2 - Interactive Launcher
+# News Aggregator v0.6 - Interactive Launcher
 # =============================================================================
 # This script provides an interactive menu for running the news aggregator.
 #
@@ -49,7 +49,7 @@ export AINEWS_INSTALLED="$SCRIPT_DIR"
 
 PY_SCRIPT="ainews.py"
 SOURCES="sources.txt"
-VERSION="0.3"
+VERSION="0.7.2"
 
 # Default settings
 DEFAULT_TOP=30
@@ -191,11 +191,13 @@ show_main_menu() {
     echo "  ${BOLD}[3]${NC} ⚙️  Custom Run (configure options)"
     echo "  ${BOLD}[4]${NC} 📅 Set Lookback Period"
     echo "  ${BOLD}[5]${NC} 💾 Manage Presets"
-    echo "  ${BOLD}[6]${NC} ℹ️  Help / Documentation"
+    echo "  ${BOLD}[6]${NC} 🤖 AI Settings & Digest"
+    echo "  ${BOLD}[7]${NC} 🔧 Settings"
+    echo "  ${BOLD}[8]${NC} ℹ️  Help / Documentation"
     echo "  ${BOLD}[0]${NC} ❌ Exit"
     echo ""
     print_line
-    echo -n "Enter choice [0-6]: "
+    echo -n "Enter choice [0-8]: "
 }
 
 show_presets_menu() {
@@ -209,11 +211,18 @@ show_presets_menu() {
     echo "  ${BOLD}[5]${NC} 📰 Full Coverage      ${YELLOW}(smart, 30 articles)${NC}"
     echo "  ${BOLD}[6]${NC} ⚡ Quick Update       ${YELLOW}(24h, 15 articles)${NC}"
     echo "  ${BOLD}[7]${NC} 📚 Deep Dive          ${YELLOW}(7 days, 50 articles)${NC}"
+    
+    # Check if spaCy is installed for precision mode
+    local spacy_status=$(python -c "
+from curation.precision import is_spacy_available
+print('✓' if is_spacy_available() else '⚠️ requires install')
+" 2>/dev/null || echo "⚠️ requires install")
+    echo "  ${BOLD}[8]${NC} 🧠 Precision Mode     ${CYAN}(spaCy NER: ${spacy_status})${NC}"
     echo ""
     echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
     echo ""
     print_line
-    echo -n "Enter choice [0-7]: "
+    echo -n "Enter choice [0-8]: "
 }
 
 show_lookback_menu() {
@@ -328,7 +337,7 @@ show_custom_menu() {
     echo "  ${BOLD}[4]${NC} 🏷️  Select categories"
     echo ""
     echo "  ${BOLD}[5]${NC} 🚀 ${GREEN}Run with these settings${NC}"
-    echo "  ${BOLD}[6]${NC} 💾 Show settings (for presets.json)"
+    echo "  ${BOLD}[6]${NC} 💾 Show settings (for config/presets.json)"
     echo ""
     echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
     echo ""
@@ -342,7 +351,7 @@ show_manage_presets_menu() {
     echo ""
     echo "  ${BOLD}[1]${NC} 📋 List all presets"
     echo "  ${BOLD}[2]${NC} ➕ Create new preset (via custom run)"
-    echo "  ${BOLD}[3]${NC} 📝 Edit presets.json (opens file)"
+    echo "  ${BOLD}[3]${NC} 📝 Edit config/presets.json (opens file)"
     echo ""
     echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
     echo ""
@@ -368,7 +377,7 @@ show_help() {
     echo ""
     echo "  ${BOLD}Files you can edit:${NC}"
     echo "  • ${CYAN}sources.txt${NC}  - Add/remove news sources"
-    echo "  • ${CYAN}presets.json${NC} - Create/modify presets"
+    echo "  • ${CYAN}config/presets.json${NC} - Create/modify presets"
     echo ""
     echo "  ${BOLD}Command line usage:${NC}"
     echo "  ${YELLOW}./run_ainews.sh --preset ai_focus${NC}"
@@ -394,6 +403,386 @@ show_run_confirmation() {
 }
 
 # =============================================================================
+# AI SETTINGS MENU
+# =============================================================================
+
+show_ai_menu() {
+    print_header
+    echo "  ${BOLD}${CYAN}🤖 AI SETTINGS & DIGEST${NC}"
+    echo ""
+    echo "  ${BOLD}[1]${NC} 🔧 Configure AI Provider"
+    echo "  ${BOLD}[2]${NC} 📝 Generate Daily Digest"
+    echo "  ${BOLD}[3]${NC} 📝 Generate Weekly Digest"
+    echo "  ${BOLD}[4]${NC} 📝 Generate Monthly Digest"
+    echo "  ${BOLD}[5]${NC} 📊 Show AI Status"
+    echo ""
+    echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-5]: "
+}
+
+handle_ai_menu() {
+    while true; do
+        show_ai_menu
+        read_line choice
+        case $choice in
+            1)
+                handle_ai_config
+                ;;
+            2)
+                handle_digest_choice "daily" 1
+                ;;
+            3)
+                handle_digest_choice "weekly" 7
+                ;;
+            4)
+                handle_digest_choice "monthly" 30
+                ;;
+            5)
+                echo ""
+                python "$PY_SCRIPT" --status
+                wait_key
+                ;;
+            0) return ;;
+            *) warn "Invalid choice. Please try again."; sleep 1 ;;
+        esac
+    done
+}
+
+# Handle digest choice with saved vs fresh option
+handle_digest_choice() {
+    local period="$1"
+    local days="$2"
+    
+    echo ""
+    print_line
+    echo ""
+    
+    # Check for saved articles
+    local article_count=$(python -c "
+from data.models import get_recent_articles
+articles = get_recent_articles(limit=500, days=$days)
+print(len(articles))
+" 2>/dev/null || echo "0")
+    
+    echo "  ${BOLD}${CYAN}📝 Generate ${period^} Digest${NC}"
+    echo ""
+    
+    if [ "$article_count" -gt 0 ]; then
+        echo "  ${GREEN}✓ Found $article_count saved articles${NC} (last $days days)"
+        echo ""
+        echo "  ${BOLD}[1]${NC} Use saved articles ${YELLOW}(quick)${NC}"
+        echo "  ${BOLD}[2]${NC} Fetch fresh articles first ${YELLOW}(takes ~2 min)${NC}"
+        echo "  ${BOLD}[0]${NC} ← Cancel"
+        echo ""
+        print_line
+        echo -n "Enter choice [0-2]: "
+        read_line digest_choice
+        
+        case $digest_choice in
+            1)
+                echo ""
+                info "Generating $period digest from saved articles..."
+                python "$PY_SCRIPT" --digest "$period"
+                ;;
+            2)
+                echo ""
+                info "Fetching fresh articles, then generating $period digest..."
+                python "$PY_SCRIPT" --fetch-and-digest "$period"
+                ;;
+            0|*)
+                return
+                ;;
+        esac
+    else
+        echo "  ${YELLOW}⚠ No saved articles found${NC}"
+        echo ""
+        echo "  ${BOLD}[1]${NC} Fetch fresh articles and generate digest"
+        echo "  ${BOLD}[0]${NC} ← Cancel"
+        echo ""
+        print_line
+        echo -n "Enter choice [0-1]: "
+        read_line digest_choice
+        
+        case $digest_choice in
+            1)
+                echo ""
+                info "Fetching fresh articles, then generating $period digest..."
+                python "$PY_SCRIPT" --fetch-and-digest "$period"
+                ;;
+            0|*)
+                return
+                ;;
+        esac
+    fi
+    
+    wait_key
+}
+
+handle_ai_config() {
+    print_header
+    echo "  ${BOLD}${CYAN}🔧 CONFIGURE AI PROVIDER${NC}"
+    echo ""
+    echo "  ${BOLD}[1]${NC} Google Gemini ${YELLOW}(Recommended)${NC}"
+    echo "  ${BOLD}[2]${NC} OpenAI"
+    echo "  ${BOLD}[3]${NC} Anthropic Claude"
+    echo "  ${BOLD}[4]${NC} Local LLM (Ollama)"
+    echo ""
+    echo "  ${BOLD}[0]${NC} ← Cancel"
+    echo ""
+    print_line
+    echo -n "Select provider [0-4]: "
+    read_line provider_choice
+    
+    case $provider_choice in
+        1) PROVIDER="gemini"; DEFAULT_MODEL="gemini-2.5-flash"; DEFAULT_URL="https://generativelanguage.googleapis.com/v1beta" ;;
+        2) PROVIDER="openai"; DEFAULT_MODEL="gpt-4o-mini"; DEFAULT_URL="" ;;
+        3) PROVIDER="claude"; DEFAULT_MODEL="claude-3-haiku-20240307"; DEFAULT_URL="" ;;
+        4) PROVIDER="local"; DEFAULT_MODEL="llama2"; DEFAULT_URL="http://localhost:11434" ;;
+        0) return ;;
+        *) warn "Invalid choice."; sleep 1; return ;;
+    esac
+    
+    echo ""
+    print_line
+    echo ""
+    echo "  ${BOLD}Enter API Key:${NC}"
+    echo -n "  > "
+    read_line API_KEY
+    
+    if [ -z "$API_KEY" ] && [ "$PROVIDER" != "local" ]; then
+        error "API key required for $PROVIDER"
+        wait_key
+        return
+    fi
+    
+    echo ""
+    echo "  ${BOLD}API URL${NC} (press Enter for default: ${YELLOW}${DEFAULT_URL:-auto}${NC}):"
+    echo -n "  > "
+    read_line CUSTOM_URL
+    [ -z "$CUSTOM_URL" ] && CUSTOM_URL="$DEFAULT_URL"
+    
+    echo ""
+    echo "  ${BOLD}Model Name${NC} (press Enter for default: ${YELLOW}${DEFAULT_MODEL}${NC}):"
+    echo -n "  > "
+    read_line CUSTOM_MODEL
+    [ -z "$CUSTOM_MODEL" ] && CUSTOM_MODEL="$DEFAULT_MODEL"
+    
+    # Save to .env file
+    echo ""
+    info "Saving configuration..."
+    
+    # Create or update .env file
+    cat > .env << EOF
+# AI Configuration - Generated by run_ainews.sh
+AINEWS_API_KEY=$API_KEY
+AINEWS_PROVIDER=$PROVIDER
+AINEWS_MODEL=$CUSTOM_MODEL
+AINEWS_ENDPOINT=$CUSTOM_URL
+EOF
+    
+    # Set file permissions (owner only)
+    chmod 600 .env
+    
+    # Update config/config.json
+    python -c "
+import json
+from pathlib import Path
+
+config_file = Path('config/config.json')
+config = {}
+if config_file.exists():
+    try:
+        config = json.loads(config_file.read_text())
+    except:
+        pass
+
+config['ai'] = {
+    'provider': '$PROVIDER',
+    'model': '$CUSTOM_MODEL',
+    'endpoint': '$CUSTOM_URL'
+}
+config_file.write_text(json.dumps(config, indent=2))
+print('✓ Configuration saved')
+"
+    
+    # Test connection
+    echo ""
+    echo "  Testing connection..."
+    python -c "
+import os
+os.environ['AINEWS_API_KEY'] = '$API_KEY'
+from ai.factory import create_provider
+provider = create_provider('$PROVIDER', '$CUSTOM_MODEL')
+if provider.test_connection():
+    print('  ${GREEN}✓ Connection successful!${NC}')
+else:
+    print('  ${RED}✗ Connection failed - check credentials${NC}')
+"
+    
+    wait_key
+}
+
+# =============================================================================
+# SETTINGS MENU
+# =============================================================================
+
+show_settings_menu() {
+    print_header
+    echo "  ${BOLD}${CYAN}🔧 SETTINGS${NC}"
+    echo ""
+    
+    # Read current settings
+    local max_age=$(python -c "
+from config.settings import get_settings
+s = get_settings()
+print(s.database.max_age_days)
+" 2>/dev/null || echo "30")
+
+    # Check if spaCy is installed
+    local spacy_status=$(python -c "
+from curation.precision import is_spacy_available
+print('Installed ✓' if is_spacy_available() else 'Not installed')
+" 2>/dev/null || echo "Not installed")
+    
+    echo "  ${BOLD}Current Settings:${NC}"
+    echo "    Max article age: ${GREEN}${max_age} days${NC}"
+    echo "    spaCy Precision: ${YELLOW}${spacy_status}${NC}"
+    echo ""
+    echo "  ${BOLD}[1]${NC} Change max article age"
+    echo "  ${BOLD}[2]${NC} Clear all articles from database"
+    echo "  ${BOLD}[3]${NC} Show database stats"
+    echo "  ${BOLD}[4]${NC} 🧠 Install spaCy Precision Mode"
+    echo ""
+    echo "  ${BOLD}[0]${NC} ← Back to Main Menu"
+    echo ""
+    print_line
+    echo -n "Enter choice [0-4]: "
+}
+
+handle_settings_menu() {
+    while true; do
+        show_settings_menu
+        read_line choice
+        case $choice in
+            1)
+                echo ""
+                echo "  ${BOLD}Enter new max article age (days):${NC}"
+                echo -n "  > "
+                read_line new_age
+                
+                if [[ "$new_age" =~ ^[0-9]+$ ]] && [ "$new_age" -gt 0 ]; then
+                    # Update config/config.json
+                    python -c "
+import json
+from pathlib import Path
+
+config_file = Path('config/config.json')
+config = {}
+if config_file.exists():
+    try:
+        config = json.loads(config_file.read_text())
+    except:
+        pass
+
+if 'database' not in config:
+    config['database'] = {}
+config['database']['max_age_days'] = $new_age
+config_file.write_text(json.dumps(config, indent=2))
+print('✓ Max article age set to $new_age days')
+"
+                else
+                    warn "Invalid input. Please enter a positive number."
+                fi
+                wait_key
+                ;;
+            2)
+                echo ""
+                warn "This will delete ALL articles from the database!"
+                echo -n "  Are you sure? [y/N]: "
+                read_line confirm
+                if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                    python -c "
+from data.models import delete_old_articles
+deleted = delete_old_articles(0)  # Delete all
+print(f'🗑️ Deleted {deleted} articles')
+"
+                else
+                    info "Cancelled."
+                fi
+                wait_key
+                ;;
+            3)
+                echo ""
+                python "$PY_SCRIPT" --status
+                wait_key
+                ;;
+            4)
+                handle_spacy_install
+                ;;
+            0) return ;;
+            *) warn "Invalid choice. Please try again."; sleep 1 ;;
+        esac
+    done
+}
+
+# Handle spaCy installation
+handle_spacy_install() {
+    echo ""
+    print_line
+    echo ""
+    echo "  ${BOLD}${CYAN}🧠 spaCy Precision Mode${NC}"
+    echo ""
+    
+    # Check if already installed
+    local is_installed=$(python -c "
+from curation.precision import is_spacy_available
+print('yes' if is_spacy_available() else 'no')
+" 2>/dev/null || echo "no")
+    
+    if [ "$is_installed" = "yes" ]; then
+        echo "  ${GREEN}✓ spaCy is already installed!${NC}"
+        echo ""
+        echo "  Use the '${BOLD}precision${NC}' preset to enable enhanced classification."
+        echo "  Example: python ainews.py --preset precision"
+        wait_key
+        return
+    fi
+    
+    echo "  ${YELLOW}# Package installation required on first use${NC}"
+    echo ""
+    echo "  spaCy provides enhanced entity recognition for better"
+    echo "  classification of AI companies, financial terms, etc."
+    echo ""
+    echo "  ${BOLD}This will install:${NC}"
+    echo "    - spaCy (~50MB)"
+    echo "    - en_core_web_sm model (~15MB)"
+    echo ""
+    echo -n "  Do you want to proceed? [y/N]: "
+    read_line confirm
+    
+    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+        echo ""
+        info "Installing spaCy..."
+        python -c "
+from curation.precision import install_spacy
+if install_spacy():
+    print('✓ spaCy installed successfully!')
+    print('  Use --preset precision to enable enhanced mode.')
+else:
+    print('✗ Installation failed. Try manually:')
+    print('  pip install spacy')
+    print('  python -m spacy download en_core_web_sm')
+"
+    else
+        info "Installation cancelled."
+    fi
+    
+    wait_key
+}
+
+# =============================================================================
 # MENU HANDLERS
 # =============================================================================
 
@@ -409,10 +798,73 @@ handle_presets_menu() {
             5) run_aggregator "--preset default"; wait_key ;;
             6) run_aggregator "--preset quick_update"; wait_key ;;
             7) run_aggregator "--preset deep_dive"; wait_key ;;
+            8) handle_precision_mode ;;
             0) return ;;
             *) warn "Invalid choice. Please try again."; sleep 1 ;;
         esac
     done
+}
+
+# Handle precision mode with spaCy install check
+handle_precision_mode() {
+    # Check if spaCy is installed
+    local is_installed=$(python -c "
+from curation.precision import is_spacy_available
+print('yes' if is_spacy_available() else 'no')
+" 2>/dev/null || echo "no")
+    
+    if [ "$is_installed" = "yes" ]; then
+        # spaCy is ready, run precision mode
+        info "Running with Precision Mode (spaCy NER enabled)..."
+        run_aggregator "--preset precision"
+        wait_key
+    else
+        # Need to install spaCy first
+        echo ""
+        print_line
+        echo ""
+        echo "  ${BOLD}${CYAN}🧠 Precision Mode${NC}"
+        echo ""
+        echo "  ${YELLOW}# Package installation required on first use${NC}"
+        echo ""
+        echo "  Precision mode uses spaCy NER for enhanced entity recognition."
+        echo "  This improves classification of AI companies, financial entities, etc."
+        echo ""
+        echo "  ${BOLD}This will install:${NC}"
+        echo "    - spaCy library (~50MB)"
+        echo "    - en_core_web_sm model (~15MB)"
+        echo ""
+        echo -n "  Install and run Precision Mode? [y/N]: "
+        read_line confirm
+        
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            echo ""
+            info "Installing spaCy..."
+            
+            local install_result=$(python -c "
+from curation.precision import install_spacy
+if install_spacy():
+    print('success')
+else:
+    print('failed')
+" 2>&1)
+            
+            if [[ "$install_result" == *"success"* ]]; then
+                success "spaCy installed successfully!"
+                echo ""
+                info "Running with Precision Mode..."
+                run_aggregator "--preset precision"
+            else
+                error "Installation failed. Try manually:"
+                echo "    pip install spacy"
+                echo "    python -m spacy download en_core_web_sm"
+            fi
+            wait_key
+        else
+            info "Cancelled. You can install spaCy later from Settings menu [7]."
+            wait_key
+        fi
+    fi
 }
 
 handle_lookback_menu() {
@@ -631,7 +1083,7 @@ handle_custom_menu() {
                 # Show settings for copy/paste
                 echo ""
                 print_line
-                echo "  ${BOLD}Copy these to presets.json:${NC}"
+                echo "  ${BOLD}Copy these to config/presets.json:${NC}"
                 echo ""
                 echo "  \"my_preset\": {"
                 echo "      \"name\": \"My Custom Preset\","
@@ -678,15 +1130,15 @@ handle_manage_presets() {
                 ;;
             3)
                 echo ""
-                info "Opening presets.json..."
+                info "Opening config/presets.json..."
                 if command -v code &>/dev/null; then
-                    code presets.json
+                    code config/presets.json
                 elif command -v nano &>/dev/null; then
-                    nano presets.json
+                    nano config/presets.json
                 elif command -v vim &>/dev/null; then
-                    vim presets.json
+                    vim config/presets.json
                 else
-                    echo "Please edit presets.json with your preferred editor."
+                    echo "Please edit config/presets.json with your preferred editor."
                 fi
                 wait_key
                 ;;
@@ -713,14 +1165,16 @@ main_menu_loop() {
             3) handle_custom_menu ;;
             4) handle_lookback_menu ;;
             5) handle_manage_presets ;;
-            6) show_help ;;
+            6) handle_ai_menu ;;
+            7) handle_settings_menu ;;
+            8) show_help ;;
             0)
                 echo ""
                 info "Goodbye!"
                 exit 0
                 ;;
             *)
-                warn "Invalid choice. Please enter 0-6."
+                warn "Invalid choice. Please enter 0-8."
                 sleep 1
                 ;;
         esac

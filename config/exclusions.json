@@ -1,0 +1,57 @@
+{
+    "_comment": "Exclusion patterns to prevent false positive classifications",
+    "_version": "0.7.1",
+    "global": [
+        "sponsored content",
+        "podcast transcript",
+        "advertisement",
+        "press release distribution",
+        "paid promotion",
+        "affiliate disclosure"
+    ],
+    "ai_headlines": [
+        "stock price",
+        "market cap",
+        "earnings call",
+        "quarterly results",
+        "share price target",
+        "investor relations",
+        "dividend announcement"
+    ],
+    "cybersecurity": [
+        "funding round",
+        "series a",
+        "series b",
+        "acquisition deal",
+        "merger announcement",
+        "ipo filing"
+    ],
+    "crypto_blockchain": [
+        "fantasy sports",
+        "gaming token",
+        "nft art auction",
+        "celebrity endorsement"
+    ],
+    "finance_markets": [
+        "sports betting",
+        "fantasy league",
+        "gaming odds"
+    ],
+    "tech_industry": [
+        "product unboxing",
+        "phone case review",
+        "accessory roundup"
+    ],
+    "health_biotech": [
+        "diet tips",
+        "weight loss trick",
+        "miracle cure",
+        "alternative medicine"
+    ],
+    "science_research": [
+        "horoscope",
+        "astrology",
+        "pseudoscience"
+    ],
+    "viral_trending": []
+}

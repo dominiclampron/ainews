@@ -157,7 +157,6 @@ https://thesequence.substack.com/feed
 https://www.thestack.technology/latest/rss/
 https://blog.tensorflow.org/feeds/posts/default?alt=rss
 https://www.thetradenews.com/feed/
-https://www.theverge.com/rss/index.xml
 http://feeds.libsyn.com/102459/rss
 https://pub.towardsai.net/feed
 https://towardsdatascience.com/feed
@@ -234,3 +233,8 @@ https://coindesk.com/arc/outboundfeeds/rss/
 https://decrypt.co/feed
 https://bitcoinmagazine.com/feed
 https://cryptopotato.com/feed/
+
+# ============================================
+# PAYWALL (v0.4)
+# ============================================
+# https://www.theverge.com/rss/index.xml # paywall

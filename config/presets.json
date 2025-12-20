@@ -1,6 +1,6 @@
 {
     "_comment": "News Aggregator Presets - Edit to customize your news experience",
-    "_version": "0.3",
+    "_version": "0.5",
     "default": {
         "name": "Full Coverage",
         "description": "All categories, smart lookback from last run",
@@ -11,7 +11,21 @@
         "top_articles": 30,
         "other_min": 10,
         "other_max": 20,
-        "workers": 25
+        "workers": 25,
+        "precision_mode": false
+    },
+    "precision": {
+        "name": "Precision Mode",
+        "description": "Enhanced accuracy with spaCy NER (requires spaCy)",
+        "categories": [
+            "all"
+        ],
+        "hours": null,
+        "top_articles": 30,
+        "other_min": 10,
+        "other_max": 20,
+        "workers": 25,
+        "precision_mode": true
     },
     "ai_focus": {
         "name": "AI/ML Focus",

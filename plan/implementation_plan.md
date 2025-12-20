@@ -1,6 +1,6 @@
-# News Aggregator - Roadmap v0.2+
+# News Aggregator - Roadmap
 
-> **Version**: 2.0 | **Date**: 2025-12-19 | **Status**: Phase 1 ✅ Phase 2 ✅
+> **Date**: 2025-12-19 | **Status**: Phase 1 ✅ (v0.2) | Phase 2 ✅ (v0.3) | Phase 3 ✅ (v0.4)
 
 ---
 
@@ -64,20 +64,22 @@ Transform the aggregator into a system that:
 - `ainews-install.sh` - One-liner curl installer
 - `presets.json` - 7 built-in presets
 
-### Categories (Now 10)
+### Categories (10 Current, 12 in v0.5)
 
 | Category | Icon | Status |
 |----------|------|--------|
 | AI/ML Headlines | 📰 | ✅ Exists |
 | Tools, Models & Platforms | 🛠️ | ✅ Exists |
 | Governance, Safety & Ethics | ⚖️ | ✅ Exists |
-| **Finance & Markets** | 💹 | ✅ **NEW** |
-| **Crypto & Blockchain** | ₿ | ✅ **NEW** |
+| Finance & Markets | 💹 | ✅ Exists |
+| Crypto & Blockchain | ₿ | ✅ Exists |
 | Cybersecurity | 🔐 | ✅ Exists |
 | Tech Industry | 💻 | ✅ Exists |
 | Politics & Policy | 🏛️ | ✅ Exists |
 | World News | 🌍 | ✅ Exists |
 | Viral & Trending | 🔥 | ✅ Exists |
+| **Science & Research** | 🔬 | 📋 v0.5 |
+| **Health & Biotech** | 🧬 | 📋 v0.5 |
 
 ### Available Presets
 
@@ -93,7 +95,7 @@ Transform the aggregator into a system that:
 
 ---
 
-## ✅ Phase 2 Complete - Interactive Launcher (v0.2.x)
+## ✅ Phase 2 Complete - Interactive Launcher (v0.3)
 
 **Focus**: Full interactive menu system
 
@@ -126,35 +128,66 @@ Transform the aggregator into a system that:
 
 ---
 
-## 🔜 Phase 3: Multi-Source & UI (v0.2.x) - ~1 week
+## ✅ Phase 3 Complete - Multi-Source & UI (v0.4)
 
 **Focus**: Story clustering and source buttons
 
-| Task | Priority | Effort |
-|------|----------|--------|
-| Implement article clustering algorithm | 🔴 High | 4h |
-| Update Article dataclass for clusters | 🔴 High | 1h |
-| Update HTML template for multi-source buttons | 🔴 High | 3h |
-| Add reading time estimates | 🟡 Medium | 1h |
+### Completed Tasks
 
-**Deliverable**: Articles show `[Read more →] [CNN] [Reuters]`
+| Task | Status |
+|------|--------|
+| Implement article clustering algorithm | ✅ Done |
+| Update Article dataclass for clusters | ✅ Done |
+| Update HTML template for multi-source buttons | ✅ Done |
+| Add reading time estimates | ✅ Done |
 
----
+### Features Implemented
 
-## 🔮 Phase 4: Advanced Curation v2 (v0.3) - TBD
+- **Article Clustering**: Groups same story from multiple sources (55% title similarity)
+- **Multi-Source Buttons**: `[Read more →] [TechCrunch] [Verge] [Ars]`
+- **Reading Time Badges**: `⏱️ 3 min` on each article card
+- **Smart Primary Selection**: Highest-scored article becomes primary, others linked
+- **CSS Styling**: Source buttons with hover effects, time chips
 
-> **Deferred**: Separate plan will be created with user's design documents
-
-**Scope**:
-- Semantic clustering algorithm
-- Improved classification (>95% accuracy target)
-- Enhanced importance scoring
-- Multi-source selection logic
-- Full architecture diagrams
+**Deliverable**: Articles show `[Read more →] [CNN] [Reuters]` ✅
 
 ---
 
-## 🔮 Phase 5: API Summaries (v0.4) - TBD
+## 🔜 Phase 4: Advanced Curation v2 (v0.5) - ~3 weeks
+
+> **Detailed Plan**: See [phase4_implementation_plan.md](file:///C:/Users/Dom/.gemini/antigravity/brain/32ba4f1d-794a-4b41-a1f3-3427fbd6cbfb/phase4_implementation_plan.md)
+
+**Focus**: Transform from keyword-matching (~80% accuracy) to semantic understanding (>92% accuracy)
+
+### Sub-Phases
+
+| Phase | Focus | Effort |
+|-------|-------|--------|
+| **4.1** | Project Restructure — Modularize `ainews.py` into specialized files | 6-8h |
+| **4.2** | TF-IDF Clustering — Replace title similarity with proper vectorization | 4-6h |
+| **4.3** | Classification Overhaul — Add exclusion rules to prevent false positives | 5-7h |
+| **4.4** | Enhanced Scoring — Multi-factor algorithm with configurable weights | 3-4h |
+| **4.5** | Testing & Validation — Unit tests, accuracy tests, >60% coverage | 4-6h |
+| **4.6** | Documentation & Deployment — README, docstrings, release | 2-3h |
+
+### Key Metrics
+
+| Metric | v0.4 (Current) | v0.5 Target |
+|--------|----------------|-------------|
+| Classification Accuracy | ~80% | >92% |
+| Multi-source Articles | ~15% | 35%+ |
+| False Positives | High | <8% |
+| Test Coverage | 0% | >60% |
+
+### New Dependencies
+- `scikit-learn>=1.0.0`
+- `numpy>=1.20.0`
+
+**Deliverable**: Semantic curation with >92% accuracy and modular codebase
+
+---
+
+## 🔮 Phase 5: API Summaries (v0.6) - TBD
 
 **Focus**: AI-powered digests
 

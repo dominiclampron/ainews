@@ -1,11 +1,24 @@
 #!/usr/bin/env python3
 """
-News Aggregator v0.2 - Intelligent News Curation
+News Aggregator v0.7.2 - Intelligent News Curation with AI Summaries
+
+Main orchestrator that imports from modular components:
+- core/: Article dataclass, configuration, fetching logic
+- curation/: Clustering, classification, scoring, selection
+- output/: HTML templates and generation
+- config/: Settings, secrets, setup wizard (v0.6)
+- data/: SQLite database for article history (v0.6)
+- ai/: AI providers for summaries and digests (v0.6)
+
 Features:
-- 10-category classification system (AI, Finance, Crypto, etc.)
+- 12-category classification system
 - Preset-based configuration system
 - Multi-factor intelligent scoring
 - Source diversity enforcement
+- Multi-source story clustering (TF-IDF)
+- AI-powered summaries (Gemini, OpenAI, Claude, Ollama)
+- Weekly/daily AI-generated digests
+- SQLite database for article persistence
 - Top 30 + 10-20 "Other Interesting" articles
 - Dark mode UI
 - Auto-opens in browser (WSL/Mac/Windows)
@@ -18,664 +31,54 @@ import hashlib
 import json
 import os
 import platform
-import re
 import shutil
 import signal
 import subprocess
 import sys
 import warnings
 from collections import defaultdict
-from dataclasses import dataclass, field
-from difflib import SequenceMatcher
+from concurrent.futures import ThreadPoolExecutor, as_completed
+# Note: SequenceMatcher moved to curation/clusterer.py fallback
 from pathlib import Path
 from typing import Optional, Any
-from urllib.parse import urlparse, urljoin, urlunparse, parse_qsl, urlencode
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
 
-import feedparser
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+from bs4 import XMLParsedAsHTMLWarning
 from dateutil import parser as dateparser
-from jinja2 import Template
 from tqdm import tqdm
 
 # Suppress XML parsing warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # =============================================================================
-# CONFIGURATION & CONSTANTS
+# IMPORT FROM MODULES
 # =============================================================================
 
-VERSION = "0.3"
-UA = "Mozilla/5.0 (X11; Linux x86_64) NewsAggregator/0.3"
-PRESETS_FILE = "presets.json"
-HEADERS = {
-    "User-Agent": UA,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-}
+from core.article import Article
+from core.config import (
+    VERSION,
+    UA,
+    PRESETS_FILE,
+    HEADERS,
+    SOURCE_TIERS,
+    CATEGORIES,
+    IMPORTANCE_KEYWORDS,
+)
+from core.fetcher import (
+    now_utc,
+    normalize_url,
+    is_duplicate_story,
+    load_sources,
+    build_feed_list,
+    process_feed,
+    enrich_image,
+)
+from output.templates import HTML_TEMPLATE
+from curation.clusterer import cluster_articles_tfidf
+from curation.precision import is_spacy_available, PrecisionClassifier
 
-# Source Reputation Tiers (score multiplier)
-SOURCE_TIERS = {
-    # Tier 1: Highest credibility (1.0)
-    "tier_1": {
-        "reuters.com": 1.0, "apnews.com": 1.0, "bloomberg.com": 0.98,
-        "ft.com": 0.98, "wsj.com": 0.97, "nytimes.com": 0.96,
-        "nature.com": 0.99, "arxiv.org": 0.95, "sciencedaily.com": 0.92,
-    },
-    # Tier 2: Major tech news (0.80-0.94)
-    "tier_2": {
-        "techcrunch.com": 0.90, "theverge.com": 0.88, "arstechnica.com": 0.89,
-        "wired.com": 0.87, "technologyreview.com": 0.91, "spectrum.ieee.org": 0.90,
-        "venturebeat.com": 0.85, "zdnet.com": 0.82, "engadget.com": 0.80,
-    },
-    # Tier 3: Specialized/Quality (0.65-0.79)
-    "tier_3": {
-        "huggingface.co": 0.78, "openai.com": 0.79, "deepmind.google": 0.79,
-        "nvidia.com": 0.77, "marktechpost.com": 0.72, "infoq.com": 0.75,
-        "hackernoon.com": 0.68, "analyticsindiamag.com": 0.70,
-        "krebsonsecurity.com": 0.85, "bleepingcomputer.com": 0.78,
-        "thehackernews.com": 0.75, "schneier.com": 0.82,
-        # Finance sources
-        "cnbc.com": 0.88, "marketwatch.com": 0.85, "seekingalpha.com": 0.75,
-        # Crypto sources
-        "coindesk.com": 0.80, "cointelegraph.com": 0.78, "decrypt.co": 0.75,
-    },
-    # Tier 4: Community/Aggregators (0.50-0.64)
-    "tier_4": {
-        "reddit.com": 0.55, "dev.to": 0.58, "medium.com": 0.52,
-        "substack.com": 0.56, "news.ycombinator.com": 0.62,
-    },
-}
-
-# 10 Category System with Keywords (v0.2: added Finance & Crypto)
-CATEGORIES = {
-    "ai_headlines": {
-        "icon": "📰",
-        "title": "AI/ML Headlines",
-        "keywords_high": ["openai", "anthropic", "deepmind", "gemini", "gpt-5", "claude", "mistral", "llama", "agi", "chatgpt"],
-        "keywords_medium": ["artificial intelligence", "machine learning", "llm", "large language model", "neural network", "transformer", "foundation model"],
-        "keywords_low": ["ai", "ml", "model", "training", "inference", "benchmark", "reasoning"],
-    },
-    "tools_platforms": {
-        "icon": "🛠️",
-        "title": "Tools, Models & Platforms",
-        "keywords_high": ["api release", "open source", "github release", "framework launch", "sdk release", "new model"],
-        "keywords_medium": ["developer tool", "library", "platform", "hugging face", "pytorch", "tensorflow", "langchain"],
-        "keywords_low": ["tool", "code", "programming", "release", "launch", "checkpoint"],
-    },
-    "governance_safety": {
-        "icon": "⚖️",
-        "title": "Governance, Safety & Ethics",
-        "keywords_high": ["ai act", "regulation", "alignment", "safety research", "ai policy", "ethics board"],
-        "keywords_medium": ["ethical ai", "responsible ai", "bias", "fairness", "transparency", "audit", "compliance"],
-        "keywords_low": ["policy", "governance", "safety", "ethics", "nist", "oecd", "watermark"],
-    },
-    "finance_markets": {
-        "icon": "💹",
-        "title": "Finance & Markets",
-        "keywords_high": ["stock market", "wall street", "fed rate", "interest rate", "earnings report", "market crash", "bull market", "bear market"],
-        "keywords_medium": ["nasdaq", "s&p 500", "dow jones", "stock price", "trading", "investors", "hedge fund", "etf"],
-        "keywords_low": ["market", "stocks", "shares", "portfolio", "dividend", "bonds", "yield"],
-    },
-    "crypto_blockchain": {
-        "icon": "₿",
-        "title": "Crypto & Blockchain",
-        "keywords_high": ["bitcoin", "ethereum", "crypto crash", "btc", "eth", "sec crypto", "defi", "nft"],
-        "keywords_medium": ["blockchain", "cryptocurrency", "altcoin", "binance", "coinbase", "stablecoin", "web3"],
-        "keywords_low": ["crypto", "token", "wallet", "mining", "halving", "memecoin"],
-    },
-    "cybersecurity": {
-        "icon": "🔐",
-        "title": "Cybersecurity",
-        "keywords_high": ["data breach", "ransomware", "zero-day", "cve-", "critical vulnerability", "nation-state"],
-        "keywords_medium": ["hacker", "exploit", "malware", "phishing", "ddos", "cyber attack", "security flaw"],
-        "keywords_low": ["security", "vulnerability", "patch", "encryption", "authentication", "firewall"],
-    },
-    "tech_industry": {
-        "icon": "💻",
-        "title": "Tech Industry",
-        "keywords_high": ["ipo", "acquisition", "billion dollar", "major funding", "layoffs", "ceo"],
-        "keywords_medium": ["startup", "funding round", "series a", "series b", "valuation", "merger"],
-        "keywords_low": ["tech company", "earnings", "revenue", "hiring", "expansion", "partnership"],
-    },
-    "politics_policy": {
-        "icon": "🏛️",
-        "title": "Politics & Policy",
-        "keywords_high": ["executive order", "legislation", "congress", "senate", "biden", "trump", "eu commission"],
-        "keywords_medium": ["government", "administration", "federal", "regulatory", "antitrust", "investigation"],
-        "keywords_low": ["policy", "political", "law", "legal", "court", "ruling", "ban"],
-    },
-    "world_news": {
-        "icon": "🌍",
-        "title": "World News",
-        "keywords_high": ["china", "russia", "ukraine", "europe", "asia", "middle east", "global"],
-        "keywords_medium": ["international", "country", "nation", "foreign", "trade war", "sanctions"],
-        "keywords_low": ["world", "global", "abroad", "overseas", "export", "import"],
-    },
-    "viral_trending": {
-        "icon": "🔥",
-        "title": "Viral & Trending",
-        "keywords_high": ["viral", "breaking", "trending", "just announced", "exclusive", "leaked"],
-        "keywords_medium": ["meme", "social media", "twitter", "x.com", "went viral", "internet"],
-        "keywords_low": ["popular", "buzz", "hype", "everyone", "massive"],
-    },
-}
-
-# Importance Keywords for Scoring
-IMPORTANCE_KEYWORDS = {
-    "breaking": 0.25, "exclusive": 0.22, "just announced": 0.20, "major": 0.15,
-    "billion": 0.18, "million": 0.12, "unprecedented": 0.15, "groundbreaking": 0.14,
-    "first ever": 0.16, "world first": 0.18, "breakthrough": 0.17,
-    "openai": 0.12, "google": 0.10, "microsoft": 0.10, "meta": 0.09, "nvidia": 0.11,
-    "anthropic": 0.11, "deepmind": 0.10, "apple": 0.09, "amazon": 0.08,
-    "breach": 0.14, "hack": 0.13, "vulnerability": 0.12, "ransomware": 0.15,
-    "lawsuit": 0.13, "acquisition": 0.14, "ipo": 0.15, "layoffs": 0.12,
-    # Finance & Crypto keywords
-    "bitcoin": 0.12, "ethereum": 0.11, "crypto crash": 0.16, "fed rate": 0.14,
-    "market crash": 0.18, "all-time high": 0.15, "record high": 0.14,
-}
-
-# Thread-safe locks
-resolve_lock = Lock()
-og_lock = Lock()
 
 # =============================================================================
-# DATA CLASSES
-# =============================================================================
-
-@dataclass
-class Article:
-    title: str
-    url: str
-    outlet: str
-    outlet_key: str
-    published: Optional[dt.datetime]
-    summary: str
-    image_url: Optional[str]
-    category: str = "ai_headlines"
-    
-    # Scoring components
-    recency_score: float = 0.0
-    importance_score: float = 0.0
-    source_score: float = 0.0
-    final_score: float = 0.0
-    
-    # Metadata
-    priority: str = "normal"  # breaking, important, normal
-    why_matters: str = ""
-
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
-
-def now_utc() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
-
-def parse_dt(value) -> Optional[dt.datetime]:
-    if not value:
-        return None
-    try:
-        d = dateparser.parse(str(value))
-        if d and d.tzinfo is None:
-            d = d.replace(tzinfo=dt.timezone.utc)
-        return d
-    except Exception:
-        return None
-
-def strip_html(s: str) -> str:
-    if not s:
-        return ""
-    soup = BeautifulSoup(s, "html.parser")
-    txt = soup.get_text(" ", strip=True)
-    return re.sub(r"\s+", " ", txt).strip()
-
-def normalize_url(url: str) -> str:
-    try:
-        u = urlparse(url)
-        q = [(k, v) for k, v in parse_qsl(u.query, keep_blank_values=True)
-             if not re.match(r"^(utm_|fbclid|gclid|mc_cid|mc_eid|ref|src)$", k, re.I)]
-        u2 = u._replace(query=urlencode(q), fragment="")
-        return urlunparse(u2)
-    except Exception:
-        return url
-
-def domain_key(url: str) -> str:
-    try:
-        host = urlparse(url).netloc.lower()
-        host = host[4:] if host.startswith("www.") else host
-        return host
-    except Exception:
-        return url
-
-def sha1(s: str) -> str:
-    return hashlib.sha1(s.encode("utf-8", errors="ignore")).hexdigest()
-
-def normalize_title(title: str) -> str:
-    """Normalize title for comparison."""
-    t = title.lower()
-    t = re.sub(r"[^\w\s]", "", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    # Remove common suffixes
-    for suffix in [" reuters", " bloomberg", " ap", " wsj", " ft"]:
-        if t.endswith(suffix):
-            t = t[:-len(suffix)]
-    return t
-
-def is_duplicate_story(title1: str, title2: str, threshold: float = 0.70) -> bool:
-    """Check if two titles represent the same story."""
-    t1 = normalize_title(title1)
-    t2 = normalize_title(title2)
-    return SequenceMatcher(None, t1, t2).ratio() > threshold
-
-# =============================================================================
-# HTTP SESSION WITH CONNECTION POOLING
-# =============================================================================
-
-def create_session() -> requests.Session:
-    session = requests.Session()
-    retry = Retry(total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
-    adapter = HTTPAdapter(pool_connections=50, pool_maxsize=50, max_retries=retry)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    session.headers.update(HEADERS)
-    return session
-
-SESSION = create_session()
-
-def safe_get(url: str, timeout=12, referer: Optional[str] = None) -> Optional[requests.Response]:
-    try:
-        headers = dict(HEADERS)
-        if referer:
-            headers["Referer"] = referer
-        r = SESSION.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        if r.status_code >= 400:
-            return None
-        return r
-    except Exception:
-        return None
-
-# =============================================================================
-# SCORING ENGINE
-# =============================================================================
-
-def calculate_recency_score(published: Optional[dt.datetime]) -> float:
-    """
-    Calculate recency score with exponential decay.
-    - 0-6 hours: ~1.0
-    - 6-12 hours: ~0.85
-    - 12-24 hours: ~0.65
-    - 24-48 hours: ~0.40
-    """
-    if not published:
-        return 0.3  # Unknown date gets low score
-    
-    now = now_utc()
-    age_hours = max(0.1, (now - published).total_seconds() / 3600)
-    return max(0.1, 1.0 / (1 + (age_hours / 8) ** 1.2))
-
-def calculate_importance_score(title: str, summary: str) -> float:
-    """Calculate importance based on keywords."""
-    text = (title + " " + summary).lower()
-    score = 0.0
-    
-    for keyword, weight in IMPORTANCE_KEYWORDS.items():
-        if keyword in text:
-            score += weight
-    
-    return min(1.0, score)
-
-def get_source_reputation(domain: str) -> float:
-    """Get source reputation score from tiers."""
-    domain = domain.lower()
-    
-    for tier_name, sources in SOURCE_TIERS.items():
-        if domain in sources:
-            return sources[domain]
-        # Check partial match
-        for src, score in sources.items():
-            if src in domain or domain in src:
-                return score
-    
-    return 0.45  # Default for unknown sources
-
-def calculate_final_score(article: Article) -> float:
-    """Calculate composite final score."""
-    return (
-        article.recency_score * 0.25 +
-        article.importance_score * 0.35 +
-        article.source_score * 0.25 +
-        0.15  # Base score
-    )
-
-def determine_priority(importance_score: float, recency_score: float) -> str:
-    """Determine article priority badge."""
-    if importance_score > 0.5 and recency_score > 0.8:
-        return "breaking"
-    elif importance_score > 0.3 or recency_score > 0.7:
-        return "important"
-    return "normal"
-
-# =============================================================================
-# CATEGORY CLASSIFICATION
-# =============================================================================
-
-def classify_article(title: str, summary: str) -> str:
-    """Classify article into one of 8 categories."""
-    text = (title + " " + summary).lower()
-    scores = {}
-    
-    for cat_key, cat_data in CATEGORIES.items():
-        score = 0.0
-        
-        for kw in cat_data["keywords_high"]:
-            if kw in text:
-                score += 3.0
-        
-        for kw in cat_data["keywords_medium"]:
-            if kw in text:
-                score += 1.5
-        
-        for kw in cat_data["keywords_low"]:
-            if kw in text:
-                score += 0.5
-        
-        scores[cat_key] = score
-    
-    # Return category with highest score, default to ai_headlines
-    if max(scores.values()) == 0:
-        return "ai_headlines"
-    
-    return max(scores, key=scores.get)
-
-def generate_why_matters(category: str, title: str) -> str:
-    """Generate contextual 'why it matters' text."""
-    reasons = {
-        "ai_headlines": "Signals shifts in AI capabilities, competitive landscape, or adoption patterns.",
-        "tools_platforms": "New tools can reduce cost, raise capability, or unlock new product patterns.",
-        "governance_safety": "Policy changes can alter what models/hardware can be built, shipped, or deployed.",
-        "finance_markets": "Market movements affect investment, funding, and tech valuations.",
-        "crypto_blockchain": "Crypto trends impact fintech, regulation, and decentralized technology adoption.",
-        "cybersecurity": "Security incidents affect trust, compliance posture, and vendor choices.",
-        "tech_industry": "Market signals affect funding, compute availability, and deployment timelines.",
-        "politics_policy": "Political decisions shape regulatory environment and innovation landscape.",
-        "world_news": "Global events create new constraints or opportunities for tech deployment.",
-        "viral_trending": "Viral stories indicate shifting public sentiment and adoption trends.",
-    }
-    return reasons.get(category, "High-signal development with downstream impact.")
-
-# =============================================================================
-# FEED DISCOVERY & FETCHING (Reused from ainews4 with enhancements)
-# =============================================================================
-
-KNOWN_FEEDS_BY_DOMAIN = {
-    "techcrunch.com": ["https://techcrunch.com/category/artificial-intelligence/feed/"],
-    "theverge.com": ["https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"],
-    "arstechnica.com": ["https://arstechnica.com/feed/"],
-    "venturebeat.com": ["https://venturebeat.com/category/ai/feed/"],
-    "huggingface.co": ["https://huggingface.co/blog/feed.xml"],
-    "marktechpost.com": ["https://www.marktechpost.com/feed/"],
-}
-
-def discover_feeds(home_url: str, max_found: int = 3) -> list[str]:
-    """Discover RSS/Atom feeds from a URL."""
-    if re.search(r"\.(xml|rss|atom)$", home_url, re.I) or "/feed" in home_url:
-        return [home_url]
-    
-    feeds = []
-    r = safe_get(home_url, timeout=10)
-    if r and r.text:
-        soup = BeautifulSoup(r.text, "html.parser")
-        for link in soup.find_all("link"):
-            rel = " ".join(link.get("rel", [])).lower()
-            typ = (link.get("type") or "").lower()
-            href = link.get("href")
-            if href and "alternate" in rel and ("rss" in typ or "atom" in typ):
-                feeds.append(urljoin(home_url, href))
-    
-    # Try common suffixes
-    base = home_url.rstrip("/")
-    for suf in ["/feed", "/rss", "/feed.xml", "/rss.xml"]:
-        feeds.append(base + suf)
-    
-    return list(set(feeds))[:max_found]
-
-def google_news_rss_url(query: str, lang="en-US", region="US") -> str:
-    ceid = f"{region}:{lang.split('-')[-1].lower()}"
-    q = requests.utils.quote(query)
-    return f"https://news.google.com/rss/search?q={q}&hl={lang}&gl={region}&ceid={ceid}"
-
-def load_sources(path: str) -> list[str]:
-    """Load source URLs from file."""
-    urls = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            s = line.strip()
-            if not s or s.startswith("#"):
-                continue
-            urls.append(s)
-    return list(dict.fromkeys(urls))  # Dedupe preserving order
-
-def build_feed_list(source_urls: list[str], days: int) -> list[tuple[str, str]]:
-    """Build list of (feed_url, domain) tuples."""
-    by_dom = defaultdict(list)
-    for u in source_urls:
-        by_dom[domain_key(u)].append(u)
-    
-    feeds = []
-    for dom, urls in by_dom.items():
-        # Reddit special handling
-        for u in urls:
-            m = re.search(r"reddit\.com/r/([A-Za-z0-9_]+)/?", u)
-            if m:
-                feeds.append((f"https://www.reddit.com/r/{m.group(1)}/.rss", dom))
-        
-        # Known feeds
-        if dom in KNOWN_FEEDS_BY_DOMAIN:
-            for f in KNOWN_FEEDS_BY_DOMAIN[dom][:2]:
-                feeds.append((f, dom))
-        
-        # Discover feeds
-        discovered = discover_feeds(urls[0], max_found=2)
-        for f in discovered:
-            feeds.append((f, dom))
-        
-        # Google News fallback
-        q = f'site:{dom} (AI OR "artificial intelligence" OR cybersecurity OR tech) when:{days}d'
-        feeds.append((google_news_rss_url(q), dom))
-    
-    # Dedupe
-    seen = set()
-    uniq = []
-    for f, dom in feeds:
-        f = normalize_url(f)
-        if f not in seen:
-            seen.add(f)
-            uniq.append((f, dom))
-    
-    return uniq
-
-# =============================================================================
-# ARTICLE COLLECTION
-# =============================================================================
-
-def extract_outlet_from_entry(entry) -> str:
-    try:
-        src = entry.get("source")
-        if src and isinstance(src, dict) and src.get("title"):
-            return str(src["title"])
-    except Exception:
-        pass
-    return ""
-
-def resolve_google_url(url: str, cache: dict) -> str:
-    """Resolve Google News redirect URLs."""
-    if "news.google.com" not in url:
-        return url
-    
-    with resolve_lock:
-        if url in cache:
-            return cache[url]
-    
-    try:
-        r = SESSION.get(url, timeout=10, allow_redirects=True)
-        final = normalize_url(r.url) if r.status_code < 400 else url
-    except Exception:
-        final = url
-    
-    with resolve_lock:
-        cache[url] = final
-    
-    return final
-
-def collect_articles(feed_url: str, seed_dom: str, start: dt.datetime, 
-                     end: dt.datetime, resolve_cache: dict) -> list[Article]:
-    """Collect articles from a single feed."""
-    try:
-        fp = feedparser.parse(feed_url)
-    except Exception:
-        return []
-    
-    feed_title = fp.feed.get("title", "") if hasattr(fp, "feed") else ""
-    articles = []
-    
-    for e in getattr(fp, "entries", [])[:50]:
-        raw_link = normalize_url(getattr(e, "link", "") or "")
-        if not raw_link:
-            continue
-        
-        # Resolve Google News URLs
-        if "news.google.com" in raw_link:
-            final_link = resolve_google_url(raw_link, resolve_cache)
-            if "news.google.com" in final_link:
-                continue  # Skip if couldn't resolve
-        else:
-            final_link = raw_link
-        
-        # Parse date
-        published = parse_dt(getattr(e, "published", None) or getattr(e, "updated", None))
-        if published and not (start <= published <= end):
-            continue
-        
-        # Extract metadata
-        outlet = extract_outlet_from_entry(e) or feed_title or seed_dom
-        outlet_key = domain_key(final_link) or seed_dom
-        
-        title = (getattr(e, "title", "") or "Untitled").strip()
-        # Clean title
-        if " - " in title:
-            parts = title.rsplit(" - ", 1)
-            if len(parts) == 2 and len(parts[1]) < 50:
-                title = parts[0].strip()
-        
-        summary = strip_html(getattr(e, "summary", "") or "")
-        if len(summary) > 500:
-            summary = summary[:500] + "…"
-        if not summary:
-            summary = "Summary unavailable."
-        
-        # Extract image
-        image_url = None
-        try:
-            media = getattr(e, "media_content", None)
-            if media and isinstance(media, list) and media[0].get("url"):
-                image_url = media[0]["url"]
-        except Exception:
-            pass
-        
-        if not image_url:
-            try:
-                thumbs = getattr(e, "media_thumbnail", None)
-                if thumbs and isinstance(thumbs, list) and thumbs[0].get("url"):
-                    image_url = thumbs[0]["url"]
-            except Exception:
-                pass
-        
-        # Skip google news images
-        if image_url and "news.google.com" in image_url:
-            image_url = None
-        
-        # Create article
-        article = Article(
-            title=title,
-            url=final_link,
-            outlet=outlet.strip() or seed_dom,
-            outlet_key=outlet_key,
-            published=published,
-            summary=summary,
-            image_url=image_url,
-        )
-        
-        # Calculate scores
-        article.recency_score = calculate_recency_score(published)
-        article.importance_score = calculate_importance_score(title, summary)
-        article.source_score = get_source_reputation(outlet_key)
-        article.final_score = calculate_final_score(article)
-        
-        # Classify
-        article.category = classify_article(title, summary)
-        article.priority = determine_priority(article.importance_score, article.recency_score)
-        article.why_matters = generate_why_matters(article.category, title)
-        
-        articles.append(article)
-    
-    return articles
-
-def process_feed(args: tuple) -> list[Article]:
-    """Wrapper for parallel processing."""
-    feed_url, seed_dom, start, end, resolve_cache = args
-    try:
-        return collect_articles(feed_url, seed_dom, start, end, resolve_cache)
-    except Exception:
-        return []
-
-# =============================================================================
-# IMAGE ENRICHMENT
-# =============================================================================
-
-def extract_og_image(url: str) -> Optional[str]:
-    """Extract OpenGraph image from URL."""
-    try:
-        r = safe_get(url, timeout=10)
-        if not r or not r.text:
-            return None
-        
-        soup = BeautifulSoup(r.text, "html.parser")
-        
-        for prop in ["og:image", "twitter:image"]:
-            meta = soup.find("meta", attrs={"property": prop}) or soup.find("meta", attrs={"name": prop})
-            if meta and meta.get("content"):
-                img = meta["content"]
-                if img.startswith("http") and "logo" not in img.lower():
-                    return img
-        
-        return None
-    except Exception:
-        return None
-
-def enrich_image(article: Article, og_cache: dict) -> Article:
-    """Enrich article with OG image if missing."""
-    if article.image_url:
-        return article
-    
-    with og_lock:
-        if article.url in og_cache:
-            article.image_url = og_cache[article.url]
-            return article
-    
-    img = extract_og_image(article.url)
-    
-    with og_lock:
-        og_cache[article.url] = img
-    
-    article.image_url = img
-    return article
-
-# =============================================================================
-# DIVERSITY SELECTION
+# DIVERSITY SELECTION (will move to curation/selector.py in Phase 4.2+)
 # =============================================================================
 
 def deduplicate_articles(articles: list[Article]) -> list[Article]:
@@ -702,6 +105,36 @@ def deduplicate_articles(articles: list[Article]) -> list[Article]:
             unique.append(article)
     
     return unique
+
+
+# Note: cluster_similar_articles moved to curation/clusterer.py as cluster_articles_tfidf
+# Uses TF-IDF vectorization + cosine similarity instead of SequenceMatcher
+
+
+def calculate_reading_time(article: Article, words_per_minute: int = 200) -> int:
+    """
+    Estimate reading time in minutes based on title + summary length.
+    Minimum 1 minute, adds extra time for articles with images.
+    """
+    text = f"{article.title} {article.summary}"
+    word_count = len(text.split())
+    
+    # Base reading time
+    minutes = max(1, round(word_count / words_per_minute))
+    
+    # Add time for articles that likely have more content
+    if article.image_url:
+        minutes += 1  # Articles with images tend to be longer
+    
+    # Cap at reasonable max
+    return min(minutes, 15)
+
+
+def enrich_reading_times(articles: list[Article]) -> None:
+    """Calculate and set reading times for all articles."""
+    for article in articles:
+        article.reading_time_min = calculate_reading_time(article)
+
 
 def select_top_articles(articles: list[Article], top_n: int = 30, 
                         max_per_source: int = 3, min_categories: int = 5) -> list[Article]:
@@ -738,6 +171,7 @@ def select_top_articles(articles: list[Article], top_n: int = 30,
     
     return selected
 
+
 def select_other_interesting(articles: list[Article], top_articles: list[Article],
                              min_count: int = 10, max_count: int = 20) -> list[Article]:
     """Select 'Other Interesting' articles not in top selection."""
@@ -762,230 +196,9 @@ def select_other_interesting(articles: list[Article], top_articles: list[Article
     
     return selected[:max(min_count, len(selected))]
 
-# =============================================================================
-# HTML TEMPLATE
-# =============================================================================
-
-HTML_TEMPLATE = Template('''<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>News Aggregator — {{ today }}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #0a0a0f;
-      --bg-elevated: #12121a;
-      --bg-card: #1a1a24;
-      --bg-card-hover: #22222e;
-      --border: #2a2a3a;
-      --text: #f0f0f5;
-      --text-secondary: #a0a0b0;
-      --text-muted: #707080;
-      --accent: #6366f1;
-      --accent-light: #818cf8;
-      --accent-glow: rgba(99, 102, 241, 0.3);
-      --breaking: #ef4444;
-      --important: #f59e0b;
-      --gradient: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
-    .wrap { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
-    
-    header { background: linear-gradient(135deg, #0a0a0f, #1a1a2e); border-bottom: 1px solid var(--border); padding: 2rem 0; position: relative; }
-    header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--gradient); }
-    h1 { font-size: 2rem; font-weight: 700; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.75rem; }
-    .meta-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.9rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; font-size: 0.8rem; color: var(--text-secondary); }
-    nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; font-weight: 500; padding: 0.5rem 1rem; border-radius: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); transition: all 0.2s; }
-    nav a:hover { background: var(--bg-card-hover); border-color: var(--accent); color: var(--text); }
-    
-    main { padding: 2rem 0; }
-    section { margin-bottom: 2.5rem; }
-    h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem; }
-    h2::before { content: ''; width: 4px; height: 1.5rem; background: var(--gradient); border-radius: 2px; }
-    
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem; }
-    article { background: var(--bg-card); border: 1px solid var(--border); border-radius: 1rem; overflow: hidden; transition: all 0.3s; display: flex; flex-direction: column; }
-    article:hover { border-color: var(--accent); box-shadow: 0 0 30px var(--accent-glow); transform: translateY(-2px); }
-    article img { width: 100%; height: 160px; object-fit: cover; }
-    .no-img { height: 160px; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 2rem; opacity: 0.3; }
-    .card-body { padding: 1rem; flex: 1; display: flex; flex-direction: column; }
-    .card-meta { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-    .chip { font-size: 0.65rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 999px; text-transform: uppercase; }
-    .chip-date { background: rgba(99,102,241,0.15); color: var(--accent-light); }
-    .chip-source { background: var(--bg-elevated); color: var(--text-secondary); }
-    .chip-breaking { background: rgba(239,68,68,0.2); color: #f87171; }
-    .chip-important { background: rgba(245,158,11,0.2); color: #fbbf24; }
-    .card-title { font-size: 0.95rem; font-weight: 600; line-height: 1.4; margin-bottom: 0.5rem; }
-    .card-title a { color: inherit; text-decoration: none; }
-    .card-title a:hover { color: var(--accent-light); }
-    .card-summary { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; flex: 1; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
-    .card-link { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.75rem; padding: 0.4rem 0.8rem; background: var(--accent); color: white; text-decoration: none; border-radius: 0.4rem; font-size: 0.75rem; font-weight: 500; transition: all 0.2s; }
-    .card-link:hover { background: var(--accent-light); }
-    
-    /* Compact section for small categories */
-    .compact-section { margin-bottom: 2.5rem; }
-    .compact-grid { display: flex; flex-direction: column; gap: 1rem; }
-    .compact-card { display: flex; gap: 1rem; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 1rem; transition: all 0.2s; }
-    .compact-card:hover { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
-    .compact-cat { font-size: 1.5rem; padding: 0.5rem; background: var(--bg-elevated); border-radius: 0.5rem; height: fit-content; }
-    .compact-body { flex: 1; min-width: 0; }
-    .compact-meta { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-    .compact-title { font-size: 1rem; font-weight: 600; line-height: 1.4; margin-bottom: 0.5rem; }
-    .compact-title a { color: var(--text); text-decoration: none; }
-    .compact-title a:hover { color: var(--accent-light); }
-    .compact-summary { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .compact-img { width: 120px; height: 90px; object-fit: cover; border-radius: 0.5rem; flex-shrink: 0; }
-    @media (max-width: 600px) { .compact-img { display: none; } }
-    
-    .other-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 1rem; padding: 1.5rem; }
-    .other-section h2 { margin-bottom: 1.5rem; }
-    .other-list { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
-    .other-item { display: flex; gap: 1rem; padding: 1rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 0.75rem; transition: all 0.2s; }
-    .other-item:hover { border-color: var(--accent); }
-    .other-num { display: flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; background: var(--gradient); border-radius: 50%; font-size: 0.8rem; font-weight: 600; flex-shrink: 0; }
-    .other-content { flex: 1; min-width: 0; }
-    .other-title { font-weight: 500; margin-bottom: 0.25rem; }
-    .other-title a { color: var(--text); text-decoration: none; }
-    .other-title a:hover { color: var(--accent-light); }
-    .other-meta { font-size: 0.75rem; color: var(--text-muted); }
-    
-    footer { padding: 2rem 0; border-top: 1px solid var(--border); margin-top: 2rem; }
-    .footer-text { font-size: 0.75rem; color: var(--text-muted); }
-    .footer-text strong { color: var(--text-secondary); }
-    
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  </style>
-</head>
-<body>
-<header>
-  <div class="wrap">
-    <h1>📰 News Aggregator — {{ today }}</h1>
-    <div class="meta-bar">
-      <span class="pill">📅 {{ start }} → {{ today }}</span>
-      <span class="pill">📰 {{ total_main }} main stories</span>
-      <span class="pill">📋 {{ total_other }} other stories</span>
-      <span class="pill">🌐 {{ unique_sources }} sources</span>
-    </div>
-    <nav>
-      {% for cat_key, cat_data in categories.items() %}
-      {% if sections[cat_key] %}
-      <a href="#{{ cat_key }}">{{ cat_data.icon }} {{ cat_data.title }}</a>
-      {% endif %}
-      {% endfor %}
-      <a href="#other">📋 Other Interesting</a>
-    </nav>
-  </div>
-</header>
-
-<main class="wrap">
-  {# Large categories (3+ items) get full grid sections #}
-  {% for cat_key, cat_data in categories.items() %}
-  {% if sections[cat_key]|length >= 3 %}
-  <section id="{{ cat_key }}">
-    <h2>{{ cat_data.icon }} {{ cat_data.title }}</h2>
-    <div class="grid">
-      {% for article in sections[cat_key] %}
-      <article>
-        {% if article.image_url %}
-        <img src="{{ article.image_url }}" alt="" loading="lazy" onerror="this.outerHTML='<div class=no-img>📰</div>'">
-        {% else %}
-        <div class="no-img">📰</div>
-        {% endif %}
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="chip chip-date">{{ article.date_str }}</span>
-            <span class="chip chip-source">{{ article.outlet }}</span>
-            {% if article.priority == 'breaking' %}
-            <span class="chip chip-breaking">🔴 Breaking</span>
-            {% elif article.priority == 'important' %}
-            <span class="chip chip-important">🟠 Important</span>
-            {% endif %}
-          </div>
-          <h3 class="card-title"><a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a></h3>
-          <p class="card-summary">{{ article.summary }}</p>
-          <a href="{{ article.url }}" class="card-link" target="_blank" rel="noopener">Read more →</a>
-        </div>
-      </article>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-  {% endfor %}
-
-  {# Small categories (1-2 items) grouped together in compact section #}
-  {% set small_cats = [] %}
-  {% for cat_key, cat_data in categories.items() %}
-  {% if sections[cat_key]|length >= 1 and sections[cat_key]|length < 3 %}
-  {% set _ = small_cats.append(cat_key) %}
-  {% endif %}
-  {% endfor %}
-  
-  {% if small_cats %}
-  <section id="more-news" class="compact-section">
-    <h2>📌 More Top Stories</h2>
-    <div class="compact-grid">
-      {% for cat_key in small_cats %}
-      {% for article in sections[cat_key] %}
-      <div class="compact-card">
-        <div class="compact-cat">{{ categories[cat_key].icon }}</div>
-        <div class="compact-body">
-          <div class="compact-meta">
-            <span class="chip chip-date">{{ article.date_str }}</span>
-            <span class="chip chip-source">{{ article.outlet }}</span>
-            {% if article.priority == 'breaking' %}
-            <span class="chip chip-breaking">🔴</span>
-            {% elif article.priority == 'important' %}
-            <span class="chip chip-important">🟠</span>
-            {% endif %}
-          </div>
-          <h3 class="compact-title"><a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a></h3>
-          <p class="compact-summary">{{ article.summary }}</p>
-        </div>
-        {% if article.image_url %}
-        <img src="{{ article.image_url }}" alt="" class="compact-img" loading="lazy" onerror="this.style.display='none'">
-        {% endif %}
-      </div>
-      {% endfor %}
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  <section id="other" class="other-section">
-    <h2>📋 Other Interesting News</h2>
-    <ul class="other-list">
-      {% for article in other_articles %}
-      <li class="other-item">
-        <span class="other-num">{{ loop.index }}</span>
-        <div class="other-content">
-          <div class="other-title"><a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a></div>
-          <div class="other-meta">{{ article.date_str }} • {{ article.outlet }} • {{ categories[article.category].icon }} {{ categories[article.category].title }}</div>
-        </div>
-      </li>
-      {% endfor %}
-    </ul>
-  </section>
-</main>
-
-<footer>
-  <div class="wrap">
-    <p class="footer-text"><strong>Method:</strong> Intelligent multi-factor scoring, NLP classification, source diversity enforcement.<br>
-    <strong>Generated:</strong> {{ generated_at }}</p>
-  </div>
-</footer>
-</body>
-</html>''')
 
 # =============================================================================
-# MAIN
+# BROWSER OPENING & UTILITIES
 # =============================================================================
 
 def is_wsl() -> bool:
@@ -995,6 +208,7 @@ def is_wsl() -> bool:
             return "microsoft" in f.read().lower()
     except:
         return False
+
 
 def open_in_browser(filepath: str):
     """Open the generated HTML file in system browser."""
@@ -1047,9 +261,15 @@ def open_in_browser(filepath: str):
     except Exception as e:
         print(f"📁 Could not auto-open. Open manually: {abs_path}")
 
+
+# =============================================================================
+# PRESET LOADING & LAST RUN DATE
+# =============================================================================
+
 LAST_RAN_FILE = "last_ran_date.txt"
 MIN_HOURS = 24
 MAX_DAYS = 30
+
 
 def read_last_ran_date() -> Optional[dt.datetime]:
     """Read the last run date from file."""
@@ -1062,10 +282,12 @@ def read_last_ran_date() -> Optional[dt.datetime]:
     except Exception:
         return None
 
+
 def save_last_ran_date():
     """Save current datetime to last ran file."""
     with open(LAST_RAN_FILE, "w") as f:
         f.write(now_utc().isoformat())
+
 
 def calculate_lookback_period() -> tuple[dt.datetime, dt.datetime]:
     """
@@ -1103,9 +325,6 @@ def calculate_lookback_period() -> tuple[dt.datetime, dt.datetime]:
     
     return start, end
 
-# =============================================================================
-# PRESET LOADING
-# =============================================================================
 
 def load_presets() -> dict[str, Any]:
     """Load presets from presets.json file."""
@@ -1120,18 +339,25 @@ def load_presets() -> dict[str, Any]:
             print(f"⚠️ Could not load presets: {e}")
     return {}
 
+
 def get_preset(name: str) -> Optional[dict[str, Any]]:
     """Get a specific preset by name."""
     presets = load_presets()
     return presets.get(name)
 
+
 def list_presets() -> list[str]:
     """List available preset names."""
     return list(load_presets().keys())
 
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
 def main():
     ap = argparse.ArgumentParser(
-        description="News Aggregator v0.2 - Intelligent Curation",
+        description=f"News Aggregator v{VERSION} - Intelligent Curation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -1139,6 +365,9 @@ Examples:
   python ainews.py --preset ai_focus   # Use AI/ML preset
   python ainews.py --hours 24 --top 15 # Quick 24h summary
   python ainews.py --list-presets      # Show available presets
+  python ainews.py --setup             # Configure AI provider
+  python ainews.py --digest weekly     # Generate weekly AI digest
+  python ainews.py --status            # Show configuration status
         """
     )
     ap.add_argument("--sources", default="sources.txt")
@@ -1154,9 +383,129 @@ Examples:
     ap.add_argument("--categories", type=str, default=None,
                     help="Comma-separated list of categories to include (e.g., ai_headlines,finance_markets)")
     
+    # Phase 5: AI Integration commands
+    ap.add_argument("--setup", action="store_true",
+                    help="Run the AI provider setup wizard")
+    ap.add_argument("--status", action="store_true",
+                    help="Show configuration and AI provider status")
+    ap.add_argument("--digest", type=str, choices=["daily", "weekly", "monthly"], default=None,
+                    help="Generate AI-powered news digest (daily, weekly, or monthly)")
+    ap.add_argument("--fetch-and-digest", type=str, choices=["daily", "weekly", "monthly"], default=None,
+                    help="Fetch fresh articles, save to DB, then generate digest")
+    ap.add_argument("--save-articles", action="store_true",
+                    help="Save fetched articles to database for later digest generation")
+    
+    # v0.7: Metrics and transparency flags (opt-in only)
+    ap.add_argument("--metrics", action="store_true",
+                    help="Show precision mode metrics (entity stats, confidence distribution)")
+    ap.add_argument("--debug-classify", action="store_true",
+                    help="Show per-article classification explanation (verbose)")
+    ap.add_argument("--ab-precision", action="store_true",
+                    help="Run A/B comparison: Standard vs Precision classification")
+    ap.add_argument("--explain-score", action="store_true",
+                    help="Show scoring breakdown for top articles")
+    
     timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     ap.add_argument("--out", default=f"ainews_{timestamp}.html")
     args = ap.parse_args()
+    
+    # ==========================================================================
+    # AUTO-PURGE OLD ARTICLES ON STARTUP
+    # ==========================================================================
+    try:
+        from config.settings import get_settings
+        from data.models import delete_old_articles
+        
+        settings = get_settings()
+        max_age = settings.database.max_age_days
+        if max_age > 0:
+            purged = delete_old_articles(max_age)
+            if purged > 0:
+                print(f"🗑️ Purged {purged} articles older than {max_age} days")
+    except Exception:
+        pass  # Ignore if database not initialized yet
+    
+    # Handle --setup (AI configuration wizard)
+    if args.setup:
+        from config.setup import setup_wizard
+        setup_wizard()
+        sys.exit(0)
+    
+    # Handle --status (show config status)
+    if args.status:
+        from config.setup import show_status
+        from data import get_database_stats
+        
+        show_status()
+        
+        # Also show database stats
+        print()
+        print("  Database:")
+        try:
+            stats = get_database_stats()
+            print(f"    Articles:     {stats['articles']}")
+            print(f"    Summaries:    {stats['summaries']}")
+            print(f"    Digests:      {stats['digests']}")
+            print(f"    Size:         {stats['size_mb']} MB")
+        except Exception:
+            print("    (not initialized)")
+        print()
+        sys.exit(0)
+    
+    # Handle --fetch-and-digest (fetch + save + digest in one command)
+    if args.fetch_and_digest:
+        print(f"📰 Fetching fresh articles for {args.fetch_and_digest} digest...")
+        # Override args to do a full run with save
+        args.save_articles = True
+        args.digest = None  # Will call digest after the run
+        # Continue to main flow, then call digest at the end
+        _pending_digest_type = args.fetch_and_digest
+    else:
+        _pending_digest_type = None
+    
+    # Handle --digest (generate AI digest from stored articles)
+    if args.digest:
+        from ai import get_summarizer
+        from data.models import get_recent_articles
+        
+        summarizer = get_summarizer()
+        if not summarizer.is_available():
+            print("❌ AI provider not configured.")
+            print("   Run: python ainews.py --setup")
+            sys.exit(1)
+        
+        # Check if we have articles
+        days = {"daily": 1, "weekly": 7, "monthly": 30}[args.digest]
+        articles = get_recent_articles(limit=100, days=days)
+        
+        if not articles:
+            print(f"⚠️ No articles found for {args.digest} digest.")
+            print(f"   Run: python ainews.py --fetch-and-digest {args.digest}")
+            print(f"   Or run the aggregator first to save articles.")
+            sys.exit(1)
+        
+        print(f"📝 Generating {args.digest} digest from {len(articles)} articles...")
+        
+        if args.digest == "weekly":
+            output = summarizer.generate_weekly_digest(output_format="markdown")
+        elif args.digest == "monthly":
+            output = summarizer.generate_monthly_digest(output_format="markdown")
+        else:
+            output = summarizer.generate_daily_digest(output_format="markdown")
+        
+        if output.success:
+            print()
+            print("=" * 60)
+            print(output.text)
+            print("=" * 60)
+            print()
+            print(f"✓ Articles: {output.article_count}")
+            print(f"✓ Tokens: {output.token_count}")
+            print(f"✓ Provider: {output.provider}/{output.model}")
+        else:
+            print(f"❌ Failed: {output.error}")
+        
+        sys.exit(0)
     
     # Handle --list-presets
     if args.list_presets:
@@ -1207,6 +556,26 @@ Examples:
             active_categories = valid_cats
         else:
             active_categories = None  # Fall back to all
+    
+    # Precision mode handling (optional spaCy)
+    precision_mode = preset_config.get("precision_mode", False)
+    precision_classifier = None
+    if precision_mode:
+        print("🧠 Precision mode requested...")
+        if is_spacy_available():
+            precision_classifier = PrecisionClassifier()
+            print("✓ spaCy available, precision mode enabled")
+        else:
+            # Prompt for install
+            from curation.precision import prompt_install_spacy, install_spacy
+            if prompt_install_spacy():
+                if install_spacy():
+                    precision_classifier = PrecisionClassifier()
+                    print("✓ Precision mode enabled")
+                else:
+                    print("⚠️ Falling back to standard mode")
+            else:
+                print("⚠️ spaCy declined, using standard mode")
     
     # Calculate lookback period
     if hours_override:
@@ -1267,6 +636,15 @@ Examples:
     all_articles = deduplicate_articles(all_articles)
     print(f"✓ {len(all_articles)} unique articles")
     
+    # Cluster similar stories from multiple sources using TF-IDF
+    print("🔗 Clustering with TF-IDF (threshold=0.75)...")
+    all_articles = cluster_articles_tfidf(all_articles, similarity_threshold=0.75)
+    multi_source_count = sum(1 for a in all_articles if len(a.related_articles) > 0)
+    print(f"✓ Found {multi_source_count} stories with multiple sources")
+    
+    # Calculate reading times
+    enrich_reading_times(all_articles)
+    
     # Enrich images for top candidates
     top_candidates = sorted(all_articles, key=lambda x: x.final_score, reverse=True)[:80]
     print(f"\n🖼️ Enriching images...")
@@ -1309,6 +687,8 @@ Examples:
             "priority": article.priority,
             "why_matters": article.why_matters,
             "category": article.category,
+            "related_articles": article.related_articles,  # List of (outlet, url) tuples
+            "reading_time": article.reading_time_min,
         })
     
     other_list = [{
@@ -1317,6 +697,8 @@ Examples:
         "outlet": a.outlet,
         "date_str": a.published.strftime("%Y-%m-%d") if a.published else "Unknown",
         "category": a.category,
+        "related_articles": a.related_articles,
+        "reading_time": a.reading_time_min,
     } for a in other_articles]
     
     # Count stats
@@ -1345,14 +727,90 @@ Examples:
     save_last_ran_date()
     print(f"📌 Updated {LAST_RAN_FILE} for next run")
     
+    # AUTO-SAVE articles to database (always, not just when --save-articles)
+    all_to_save = top_articles + other_articles
+    try:
+        from data import save_articles
+        saved_count = save_articles(all_to_save)
+        print(f"💾 Saved {saved_count} articles to database")
+    except Exception as e:
+        print(f"⚠️ Could not save articles to database: {e}")
+    
     print(f"\n📈 Category breakdown:")
     for cat, data in display_categories.items():
         count = len(sections.get(cat, []))
         if count:
             print(f"   {data['icon']} {data['title']}: {count}")
     
+    # ==========================================================================
+    # v0.7: METRICS OUTPUT (opt-in via --metrics, --ab-precision, --explain-score)
+    # ==========================================================================
+    if args.metrics or args.ab_precision or args.explain_score:
+        from curation.metrics import (
+            calculate_entity_stats,
+            run_ab_comparison,
+            print_metrics_summary,
+            print_score_breakdown,
+        )
+        
+        all_articles = top_articles + other_articles
+        
+        # Calculate entity stats if precision mode
+        entity_stats = None
+        if args.metrics and precision_mode:
+            entity_stats = calculate_entity_stats(all_articles)
+        
+        # Run A/B comparison if requested
+        ab_result = None
+        if args.ab_precision:
+            print("\n⚡ Running A/B comparison (this may take a moment)...")
+            ab_result = run_ab_comparison(all_articles)
+        
+        # Print metrics summary
+        if args.metrics or args.ab_precision:
+            print_metrics_summary(
+                all_articles,
+                entity_stats=entity_stats,
+                ab_result=ab_result,
+                precision_mode=precision_mode
+            )
+        
+        # Print score breakdown
+        if args.explain_score:
+            print_score_breakdown(all_articles, top_n=10)
+    
     # Auto-open in browser
     open_in_browser(args.out)
+    
+    # If --fetch-and-digest was used, now generate the digest
+    if _pending_digest_type:
+        print()
+        print("=" * 60)
+        print(f"📝 Now generating {_pending_digest_type} digest...")
+        print("=" * 60)
+        
+        from ai import get_summarizer
+        
+        summarizer = get_summarizer()
+        if not summarizer.is_available():
+            print("❌ AI provider not configured. Run: python ainews.py --setup")
+        else:
+            if _pending_digest_type == "weekly":
+                output = summarizer.generate_weekly_digest(output_format="markdown")
+            elif _pending_digest_type == "monthly":
+                output = summarizer.generate_monthly_digest(output_format="markdown")
+            else:
+                output = summarizer.generate_daily_digest(output_format="markdown")
+            
+            if output.success:
+                print()
+                print(output.text)
+                print()
+                print(f"✓ Articles: {output.article_count}")
+                print(f"✓ Tokens: {output.token_count}")
+                print(f"✓ Provider: {output.provider}/{output.model}")
+            else:
+                print(f"❌ Digest failed: {output.error}")
 
 
 def signal_handler(signum, frame):

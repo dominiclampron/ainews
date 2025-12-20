@@ -1,0 +1,21 @@
+{
+    "ai": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+    },
+    "database": {
+        "path": "ainews.db",
+        "store_articles": true,
+        "store_summaries": true,
+        "max_age_days": 90
+    },
+    "digest": {
+        "frequency": "weekly",
+        "auto_generate": false,
+        "include_summaries": true,
+        "output_format": "markdown"
+    },
+    "version": "0.7.2",
+    "first_run": false
+}

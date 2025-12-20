@@ -17,7 +17,6 @@ ainews_*.html
 last_ran_date.txt
 .ainews_installed
 cache/
-data/
 
 # IDE
 .vscode/
@@ -31,3 +30,21 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Phase 5: Secrets and Database (NEVER COMMIT)
+.env
+*.db
+ainews.db
+secrets.json
+plan/
+cache/
+CHANGELOG.md
+sources_extra.txt
+sources_test.txt
+DB_SCHEMA.md
+FUTURE_IDEAS.md
+BACKLOG.md
+
+
+
+

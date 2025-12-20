@@ -1,7 +1,23 @@
-# AI News Aggregator v5 Dependencies
+# AI News Aggregator v0.6 Dependencies
 feedparser>=6.0.0
 requests>=2.28.0
 beautifulsoup4>=4.11.0
 python-dateutil>=2.8.0
 Jinja2>=3.1.0
 tqdm>=4.64.0
+
+# Phase 4.2: TF-IDF Clustering
+scikit-learn>=1.0.0
+numpy>=1.20.0
+
+# Phase 4.4: Optional Precision Mode (auto-installed on demand)
+# spacy>=3.0.0
+# Run: python -m spacy download en_core_web_sm
+
+# Phase 5: Configuration & AI Integration
+python-dotenv>=1.0.0
+
+# Phase 5: Optional AI Provider SDKs (install as needed)
+# google-generativeai>=0.3.0  # For Gemini
+# openai>=1.0.0               # For OpenAI/ChatGPT
+# anthropic>=0.8.0            # For Claude
