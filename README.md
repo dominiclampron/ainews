@@ -1,6 +1,6 @@
 # 📰 News Aggregator v0.8.0
 
-**See the BEST news in seconds !**
+**See the most important news in seconds !**
 
 Pulls from **200+ curated sources in parallel**, **dedupes + clusters** related coverage, **ranks by signal**, and generates a **beautiful dark-mode report** that **auto-opens** when it's done. Optional **AI summaries/digests** and optional **spaCy "Precision Mode"** for stronger entity-aware classification.
 
