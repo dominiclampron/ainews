@@ -26,7 +26,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
-from dateutil import parser as dateparser
+from dateutil import parser as dateparser, tz
 
 from core.article import Article
 from core.config import (
@@ -36,6 +36,18 @@ from core.config import (
     IMPORTANCE_KEYWORDS,
     KNOWN_FEEDS_BY_DOMAIN,
 )
+
+# Timezone mappings for EDT/EST parsing (fixes UnknownTimezoneWarning)
+TZINFOS = {
+    "EST": tz.tzoffset("EST", -5 * 3600),
+    "EDT": tz.tzoffset("EDT", -4 * 3600),
+    "UTC": tz.UTC,
+    "GMT": tz.UTC,
+    "PST": tz.tzoffset("PST", -8 * 3600),
+    "PDT": tz.tzoffset("PDT", -7 * 3600),
+    "CST": tz.tzoffset("CST", -6 * 3600),
+    "CDT": tz.tzoffset("CDT", -5 * 3600),
+}
 
 # Thread-safe locks for caching
 resolve_lock = Lock()
@@ -59,7 +71,7 @@ def parse_dt(value) -> Optional[dt.datetime]:
     if not value:
         return None
     try:
-        d = dateparser.parse(str(value))
+        d = dateparser.parse(str(value), tzinfos=TZINFOS)
         if d and d.tzinfo is None:
             d = d.replace(tzinfo=dt.timezone.utc)
         return d

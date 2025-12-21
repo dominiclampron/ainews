@@ -1,4 +1,4 @@
-# 📰 News Aggregator v0.7.2
+# 📰 News Aggregator v0.8.0
 
 **See the BEST news in seconds !**
 
@@ -41,25 +41,16 @@ curl -fsSL https://raw.githubusercontent.com/dominiclampron/ainews/main/ainews-i
 
 > **Note:** First-time AI setup is optional. The aggregator works without AI—it just won't generate summaries or digests until you configure a provider.
 
-### Manual Installation
 
-```bash
-git clone https://github.com/dominiclampron/ainews.git
-cd ainews
-python3 -m venv .venv
-source .venv/bin/activate        # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-./run_ainews.sh                  # Or: python ainews.py
-```
-
----
-
-## 🎛️ Using the Interactive Menu
-
+## 🖥️ Using the Interactive Menu
 
 ### Main Menu
 
 ```
+╔══════════════════════════════════════════════════════════╗
+║           📰 NEWS AGGREGATOR v0.2 - LAUNCHER             ║
+╚══════════════════════════════════════════════════════════╝
+
 [1] 🚀 Run with Default Settings    → Fetch articles, generate HTML report
 [2] 📋 Quick Presets                → Choose preset (AI Focus, Finance, etc.)
 [3] ⚙️  Custom Run                   → Configure hours, categories, article count
@@ -139,18 +130,49 @@ The aggregator remembers when you last ran it. If you run it again, it automatic
 - **10–20** "Other Interesting" articles for broader coverage
 - **Max 3** articles from the same source (diversity enforcement)
 
-### v0.7 Additions: Transparency & Metrics
+### Manual Installation
 
-New opt-in flags for inspecting classification behavior:
+```bash
+git clone https://github.com/dominiclampron/ainews.git
+cd ainews
+python3 -m venv .venv
+source .venv/bin/activate        # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+./run_ainews.sh                  # Or: python ainews.py
+```
 
-| Flag | Description |
-|------|-------------|
-| `--metrics` | Show entity stats and confidence distribution |
-| `--ab-precision` | Run A/B comparison: Standard vs Precision mode |
-| `--explain-score` | Show scoring breakdown for top articles |
-| `--debug-classify` | Per-article classification explanation (verbose) |
+### 🐳 Docker
 
-These flags produce additional terminal output but do not change the default behavior or HTML report.
+```bash
+# Build and run (output appears in ./out on your machine)
+docker build -t ainews .
+docker run -v ./out:/out -v ./data:/data ainews
+```
+
+| Volume | Contents |
+|--------|----------|
+| `./out` | HTML reports |
+| `./data` | Database, last run tracking |
+
+**Windows PowerShell:**
+```powershell
+docker run -v ${PWD}/out:/out -v ${PWD}/data:/data ainews
+```
+
+**With API keys:**
+```bash
+docker run -v ./out:/out -v ./data:/data --env-file .env ainews
+```
+
+**Interactive menu (requires -it):**
+```bash
+docker run -it -v ./out:/out -v ./data:/data ainews --menu
+```
+
+**Docker Compose:**
+```bash
+docker-compose up --build
+```
 
 ---
 
@@ -432,6 +454,21 @@ ainews/
     ├── test_regression.py # v0.7 regression tests
     └── fixtures/          # Test data
 ```
+
+---
+
+### v0.7 Additions: Transparency & Metrics
+
+New opt-in flags for inspecting classification behavior:
+
+| Flag | Description |
+|------|-------------|
+| `--metrics` | Show entity stats and confidence distribution |
+| `--ab-precision` | Run A/B comparison: Standard vs Precision mode |
+| `--explain-score` | Show scoring breakdown for top articles |
+| `--debug-classify` | Per-article classification explanation (verbose) |
+
+These flags produce additional terminal output but do not change the default behavior or HTML report.
 
 ---
 

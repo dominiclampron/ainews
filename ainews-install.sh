@@ -35,7 +35,7 @@ set -euo pipefail
 REPO_URL="https://github.com/dominiclampron/ainews.git"
 INSTALL_DIR="${AINEWS_HOME:-$HOME/ainews}"
 MARKER_FILE=".ainews_installed"
-VERSION="0.7.2"
+VERSION="0.8.0"
 
 # =============================================================================
 # COLORS (auto-disable if not a terminal)

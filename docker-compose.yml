@@ -1,0 +1,23 @@
+# docker-compose.yml - News Aggregator Docker setup
+#
+# Usage:
+#   docker-compose up --build           # Build and run
+#   docker-compose run ainews --help    # Run with custom args
+#
+# Volumes:
+#   ./out  - HTML reports are saved here
+#   ./data - Database and state files are persisted here
+
+version: '3.8'
+
+services:
+  ainews:
+    build: .
+    volumes:
+      - ./out:/out
+      - ./data:/data
+    env_file:
+      - path: .env
+        required: false
+    # Default: run with default preset, look back 6 hours, top 30 articles
+    command: [ "--preset", "default", "--hours", "6", "--top", "30" ]

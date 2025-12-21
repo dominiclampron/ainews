@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# News Aggregator v0.6 - Interactive Launcher
+# News Aggregator v0.8.0 - Interactive Launcher
 # =============================================================================
 # This script provides an interactive menu for running the news aggregator.
 #
@@ -49,7 +49,7 @@ export AINEWS_INSTALLED="$SCRIPT_DIR"
 
 PY_SCRIPT="ainews.py"
 SOURCES="sources.txt"
-VERSION="0.7.2"
+VERSION="0.8.0"
 
 # Default settings
 DEFAULT_TOP=30
@@ -142,6 +142,12 @@ wait_key() {
 # =============================================================================
 
 setup_environment() {
+    # In Docker, skip venv/pip setup (already handled by Dockerfile)
+    if [ "${AINEWS_IN_DOCKER:-0}" = "1" ]; then
+        info "Running in Docker (environment ready)"
+        return
+    fi
+    
     # Create virtual environment if it doesn't exist
     if [ ! -d ".venv" ]; then
         echo "📦 Creating virtual environment (first-time setup)..."

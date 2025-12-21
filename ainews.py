@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-News Aggregator v0.7.2 - Intelligent News Curation with AI Summaries
+News Aggregator v0.8.0 - Intelligent News Curation with AI Summaries
 
 Main orchestrator that imports from modular components:
 - core/: Article dataclass, configuration, fetching logic
@@ -43,11 +43,23 @@ from pathlib import Path
 from typing import Optional, Any
 
 from bs4 import XMLParsedAsHTMLWarning
-from dateutil import parser as dateparser
+from dateutil import parser as dateparser, tz
 from tqdm import tqdm
 
 # Suppress XML parsing warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
+# Timezone mappings for EDT/EST parsing (fixes UnknownTimezoneWarning)
+TZINFOS = {
+    "EST": tz.tzoffset("EST", -5 * 3600),  # Eastern Standard Time (UTC-5)
+    "EDT": tz.tzoffset("EDT", -4 * 3600),  # Eastern Daylight Time (UTC-4)
+    "UTC": tz.UTC,
+    "GMT": tz.UTC,
+    "PST": tz.tzoffset("PST", -8 * 3600),
+    "PDT": tz.tzoffset("PDT", -7 * 3600),
+    "CST": tz.tzoffset("CST", -6 * 3600),
+    "CDT": tz.tzoffset("CDT", -5 * 3600),
+}
 
 # =============================================================================
 # IMPORT FROM MODULES
@@ -215,6 +227,11 @@ def open_in_browser(filepath: str):
     abs_path = os.path.abspath(filepath)
     system = platform.system().lower()
     
+    # In Docker, skip browser open - the entrypoint script handles path printing
+    if os.environ.get("AINEWS_IN_DOCKER"):
+        print(f"📁 Report saved: {filepath}")
+        return
+    
     try:
         if is_wsl():
             # WSL: Try Chrome, then Edge, then default
@@ -266,7 +283,8 @@ def open_in_browser(filepath: str):
 # PRESET LOADING & LAST RUN DATE
 # =============================================================================
 
-LAST_RAN_FILE = "last_ran_date.txt"
+# Support Docker volume mounts via env var
+LAST_RAN_FILE = os.environ.get("AINEWS_LAST_RUN", "last_ran_date.txt")
 MIN_HOURS = 24
 MAX_DAYS = 30
 
@@ -278,7 +296,7 @@ def read_last_ran_date() -> Optional[dt.datetime]:
     try:
         with open(LAST_RAN_FILE, "r") as f:
             date_str = f.read().strip()
-            return dateparser.parse(date_str)
+            return dateparser.parse(date_str, tzinfos=TZINFOS)
     except Exception:
         return None
 
@@ -406,7 +424,16 @@ Examples:
                     help="Show scoring breakdown for top articles")
     
     timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    ap.add_argument("--out", default=f"ainews_{timestamp}.html")
+    default_filename = f"ainews_{timestamp}.html"
+    
+    # Support Docker volume mounts via AINEWS_OUT_DIR env var
+    out_dir = os.environ.get("AINEWS_OUT_DIR", "")
+    if out_dir:
+        default_out = os.path.join(out_dir, default_filename)
+    else:
+        default_out = default_filename
+    
+    ap.add_argument("--out", default=default_out)
     args = ap.parse_args()
     
     # ==========================================================================

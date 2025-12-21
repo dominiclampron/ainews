@@ -109,9 +109,13 @@ class DatabaseSettings:
     
     def get_full_path(self) -> Path:
         """Get absolute path to database file."""
+        # Support Docker volume mounts via env var
+        env_path = os.environ.get("AINEWS_DB_PATH")
+        if env_path:
+            return Path(env_path)
         if os.path.isabs(self.path):
             return Path(self.path)
-        return CONFIG_DIR / self.path
+        return PROJECT_ROOT / self.path
 
 
 @dataclass

@@ -1,0 +1,49 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Generated HTML reports
+ainews_*.html
+
+# Runtime files
+last_ran_date.txt
+.ainews_installed
+cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Phase 5: Secrets and Database (NEVER COMMIT)
+.env
+*.db
+ainews.db
+secrets.json
+plan/
+cache/
+CHANGELOG.md
+sources_extra.txt
+sources_test.txt
+DB_SCHEMA.md
+FUTURE_IDEAS.md
+BACKLOG.md
+test/
+.git
+.github
