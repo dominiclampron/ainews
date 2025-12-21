@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/dominiclampron/ainews/main/ainews-i
 
 ```
 ╔══════════════════════════════════════════════════════════╗
-║           📰 NEWS AGGREGATOR v0.2 - LAUNCHER             ║
+║           📰 NEWS AGGREGATOR v0.8 - LAUNCHER             ║
 ╚══════════════════════════════════════════════════════════╝
 
 [1] 🚀 Run with Default Settings    → Fetch articles, generate HTML report
