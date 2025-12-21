@@ -117,7 +117,7 @@ print_header() {
     clear
     echo "${BOLD}${BLUE}"
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║           📰 NEWS AGGREGATOR v${VERSION} - LAUNCHER             ║"
+    echo "║           📰 NEWS AGGREGATOR v${VERSION} - LAUNCHER           ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo "${NC}"
 }
