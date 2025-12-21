@@ -10,10 +10,10 @@ Pulls from **200+ curated sources in parallel**, **dedupes + clusters** related 
 
 ## Table of Contents
 
-1. [Quick Start](#-quick-start)
-2. [Using the Interactive Menu](#-using-the-interactive-menu)
-3. [Categories](#-categories)
-4. [Core Features](#-core-features)
+1. [Core Features](#-core-features)
+2. [Quick Start](#-quick-start)
+3. [Using the Interactive Menu](#-using-the-interactive-menu)
+4. [Categories](#-categories)
 5. [Requirements](#-requirements)
 6. [Advanced Usage (CLI)](#-advanced-usage-cli)
 7. [AI Provider Setup & Security](#-ai-provider-setup--security)
@@ -21,6 +21,29 @@ Pulls from **200+ curated sources in parallel**, **dedupes + clusters** related 
 9. [Troubleshooting](#-troubleshooting)
 10. [Project Structure](#-project-structure)
 11. [Version History](#-version-history)
+
+---
+
+## ✨ Core Features
+
+### What It Does
+
+- **Fetches** articles from 200+ RSS feeds in parallel (25 workers)
+- **Classifies** each article into one of 12 categories
+- **Scores** articles by recency, source reputation, and keyword importance
+- **Deduplicates** and clusters related stories from multiple sources
+- **Generates** a beautiful dark-mode HTML report
+- **Auto-opens** the report in your browser
+
+### Smart Lookback
+
+The aggregator remembers when you last ran it. If you run it again, it automatically fetches only articles since your last run (capped at 30 days).
+
+### Article Selection
+
+- **Top 30** highest-scoring articles in the main report
+- **10–20** "Other Interesting" articles for broader coverage
+- **Max 3** articles from the same source (diversity enforcement)
 
 ---
 
@@ -41,6 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/dominiclampron/ainews/main/ainews-i
 
 > **Note:** First-time AI setup is optional. The aggregator works without AI—it just won't generate summaries or digests until you configure a provider.
 
+---
 
 ## 🖥️ Using the Interactive Menu
 
@@ -107,28 +131,6 @@ The aggregator classifies articles into **12 categories**:
 | 🔬 | **Science & Research** | Papers, discoveries, academic research |
 | 🏥 | **Health & Biotech** | Medical, FDA, biotech, pharma |
 
----
-
-## ✨ Core Features
-
-### What It Does
-
-- **Fetches** articles from 200+ RSS feeds in parallel (25 workers)
-- **Classifies** each article into one of 12 categories
-- **Scores** articles by recency, source reputation, and keyword importance
-- **Deduplicates** and clusters related stories from multiple sources
-- **Generates** a beautiful dark-mode HTML report
-- **Auto-opens** the report in your browser
-
-### Smart Lookback
-
-The aggregator remembers when you last ran it. If you run it again, it automatically fetches only articles since your last run (capped at 30 days).
-
-### Article Selection
-
-- **Top 30** highest-scoring articles in the main report
-- **10–20** "Other Interesting" articles for broader coverage
-- **Max 3** articles from the same source (diversity enforcement)
 
 ### Manual Installation
 
