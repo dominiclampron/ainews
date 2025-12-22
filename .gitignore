@@ -45,6 +45,5 @@ DB_SCHEMA.md
 FUTURE_IDEAS.md
 BACKLOG.md
 test/
-
-
-
+# local agent rules
+.agent/rules/
