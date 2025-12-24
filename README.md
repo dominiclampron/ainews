@@ -146,9 +146,8 @@ pip install -r requirements.txt
 ### 🐳 Docker
 
 ```bash
-# Build and run (output appears in ./out on your machine)
+# Build the image
 docker build -t ainews .
-docker run -v ./out:/out -v ./data:/data ainews
 ```
 
 | Volume | Contents |
@@ -156,19 +155,30 @@ docker run -v ./out:/out -v ./data:/data ainews
 | `./out` | HTML reports |
 | `./data` | Database, last run tracking |
 
+**Linux/WSL:**
+```bash
+docker run --rm -v ./out:/out -v ./data:/data ainews
+```
+
+**macOS (interactive menu):**
+```bash
+mkdir -p out data
+docker run --rm -it -v "$PWD/out:/out" -v "$PWD/data:/data" ainews --menu
+```
+
 **Windows PowerShell:**
 ```powershell
-docker run -v ${PWD}/out:/out -v ${PWD}/data:/data ainews
+docker run --rm -v ${PWD}/out:/out -v ${PWD}/data:/data ainews
+```
+
+**Interactive menu (all platforms, add -it):**
+```bash
+docker run --rm -it -v "$PWD/out:/out" -v "$PWD/data:/data" ainews --menu
 ```
 
 **With API keys:**
 ```bash
-docker run -v ./out:/out -v ./data:/data --env-file .env ainews
-```
-
-**Interactive menu (requires -it):**
-```bash
-docker run -it -v ./out:/out -v ./data:/data ainews --menu
+docker run --rm -v "$PWD/out:/out" -v "$PWD/data:/data" --env-file .env ainews
 ```
 
 **Docker Compose:**
