@@ -13,7 +13,7 @@ from __future__ import annotations
 # VERSION & HTTP SETTINGS
 # =============================================================================
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 UA = f"Mozilla/5.0 (X11; Linux x86_64) NewsAggregator/{VERSION}"
 PRESETS_FILE = "config/presets.json"
 

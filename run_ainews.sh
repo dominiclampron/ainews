@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# News Aggregator v0.8.0 - Interactive Launcher
+# News Aggregator v0.8.1 - Interactive Launcher
 # =============================================================================
 # This script provides an interactive menu for running the news aggregator.
 #
@@ -49,7 +49,7 @@ export AINEWS_INSTALLED="$SCRIPT_DIR"
 
 PY_SCRIPT="ainews.py"
 SOURCES="sources.txt"
-VERSION="0.8.0"
+VERSION="0.8.1"
 
 # Default settings
 DEFAULT_TOP=30

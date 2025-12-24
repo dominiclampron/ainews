@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-News Aggregator v0.8.0 - Intelligent News Curation with AI Summaries
+News Aggregator v0.8.1 - Intelligent News Curation with AI Summaries
 
 Main orchestrator that imports from modular components:
 - core/: Article dataclass, configuration, fetching logic
@@ -60,6 +60,20 @@ TZINFOS = {
     "CST": tz.tzoffset("CST", -6 * 3600),
     "CDT": tz.tzoffset("CDT", -5 * 3600),
 }
+
+
+def format_local_time(dt_utc: dt.datetime) -> str:
+    """
+    Convert UTC datetime to local time string for display.
+    
+    Returns format like "2025-12-23 21:45 EST"
+    """
+    if dt_utc is None:
+        return "Unknown"
+    local_tz = tz.tzlocal()
+    local_dt = dt_utc.astimezone(local_tz)
+    tz_name = local_dt.strftime("%Z") or "Local"  # Fallback if no tz name
+    return f"{local_dt.strftime('%Y-%m-%d %H:%M')} {tz_name}"
 
 # =============================================================================
 # IMPORT FROM MODULES
@@ -335,7 +349,7 @@ def calculate_lookback_period() -> tuple[dt.datetime, dt.datetime]:
         else:
             # Use last run date
             start = last_ran
-            print(f"⏰ Continuing from last run: {last_ran.strftime('%Y-%m-%d %H:%M')} UTC")
+            print(f"⏰ Continuing from last run: {format_local_time(last_ran)}")
     else:
         # No last run file - default to 48 hours
         start = end - dt.timedelta(hours=48)
@@ -614,7 +628,7 @@ Examples:
         # Use smart lookback based on last run (only for default preset)
         start, end = calculate_lookback_period()
     
-    print(f"📅 {start.strftime('%Y-%m-%d %H:%M')} → {end.strftime('%Y-%m-%d %H:%M')} UTC")
+    print(f"📅 {format_local_time(start)} → {format_local_time(end)}")
     print()
     
     # Caches
@@ -742,7 +756,7 @@ Examples:
         categories=display_categories,
         sections=sections,
         other_articles=other_list,
-        generated_at=now_utc().strftime("%Y-%m-%d %H:%M UTC"),
+        generated_at=format_local_time(now_utc()),
     )
     
     with open(args.out, "w", encoding="utf-8") as f:

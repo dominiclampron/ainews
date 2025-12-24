@@ -1,4 +1,4 @@
-# 📰 News Aggregator v0.8.0
+# 📰 News Aggregator v0.8.1
 
 **See the most important news in seconds !**
 
@@ -171,9 +171,9 @@ docker run --rm -it -v "$PWD/out:/out" -v "$PWD/data:/data" ainews --menu
 docker run --rm -v ${PWD}/out:/out -v ${PWD}/data:/data ainews
 ```
 
-**Interactive menu (all platforms, add -it):**
+**Interactive menu (Linux):**
 ```bash
-docker run --rm -it -v "$PWD/out:/out" -v "$PWD/data:/data" ainews --menu
+docker run --rm -it -v ./out:/out" -v ./data:/data" ainews --menu
 ```
 
 **With API keys:**

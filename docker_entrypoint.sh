@@ -1,6 +1,6 @@
 #!/bin/bash
 # docker_entrypoint.sh - Docker entry point with volume support
-# v0.8.0
+# v0.8.1
 # This script sets up the Docker environment for ainews:
 # - Creates output directories
 # - Sets environment variables for paths
@@ -24,6 +24,10 @@ export AINEWS_OUT_DIR="/out"
 export AINEWS_DB_PATH="/data/ainews.db"
 export AINEWS_LAST_RUN="/data/last_ran_date.txt"
 export AINEWS_IN_DOCKER="1"
+
+# Fix OpenBLAS thread creation on macOS Docker
+export OPENBLAS_NUM_THREADS=1
+export OMP_NUM_THREADS=1
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🐳 News Aggregator (Docker)"

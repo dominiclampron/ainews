@@ -16,6 +16,6 @@
         "include_summaries": true,
         "output_format": "markdown"
     },
-    "version": "0.8.0",
+    "version": "0.8.1",
     "first_run": false
 }
